@@ -19,12 +19,14 @@ package server_test
 import (
 	"reflect"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -34,6 +36,7 @@ import (
 
 const (
 	k8sVersion = "v1.29.0"
+	httpPort   = ":8080"
 )
 
 var _ = Describe("Manager", func() {
@@ -41,11 +44,14 @@ var _ = Describe("Manager", func() {
 	var cluster *clusterv1.Cluster
 	var c client.Client
 	var scheme *runtime.Scheme
+	var logger logr.Logger
 
 	BeforeEach(func() {
 		var err error
 		scheme, err = setupScheme()
 		Expect(err).To(BeNil())
+
+		logger = textlogger.NewLogger(textlogger.NewConfig())
 
 		sveltosCluster = &libsveltosv1alpha1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -97,7 +103,8 @@ var _ = Describe("Manager", func() {
 			FailureMessage: sveltosCluster.Status.FailureMessage,
 		}
 
-		manager := server.GetManagerInstance(c, scheme)
+		server.InitializeManagerInstance(c, scheme, httpPort, logger)
+		manager := server.GetManagerInstance()
 		manager.AddSveltosCluster(sveltosCluster)
 
 		clusters := manager.GetManagedSveltosClusters()
@@ -114,7 +121,8 @@ var _ = Describe("Manager", func() {
 			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
 		}
 
-		manager := server.GetManagerInstance(c, scheme)
+		server.InitializeManagerInstance(c, scheme, httpPort, logger)
+		manager := server.GetManagerInstance()
 		manager.AddSveltosCluster(sveltosCluster)
 
 		clusters := manager.GetManagedSveltosClusters()
@@ -148,7 +156,8 @@ var _ = Describe("Manager", func() {
 			FailureMessage: cluster.Status.FailureMessage,
 		}
 
-		manager := server.GetManagerInstance(c, scheme)
+		server.InitializeManagerInstance(c, scheme, httpPort, logger)
+		manager := server.GetManagerInstance()
 		manager.AddCAPICluster(cluster)
 
 		clusters := manager.GetManagedCAPIClusters()
@@ -165,7 +174,8 @@ var _ = Describe("Manager", func() {
 			APIVersion: clusterv1.GroupVersion.String(),
 		}
 
-		manager := server.GetManagerInstance(c, scheme)
+		server.InitializeManagerInstance(c, scheme, httpPort, logger)
+		manager := server.GetManagerInstance()
 		manager.AddCAPICluster(cluster)
 
 		clusters := manager.GetManagedCAPIClusters()

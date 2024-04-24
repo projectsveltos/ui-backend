@@ -17,55 +17,18 @@ metadata:
   namespace: projectsveltos
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  labels:
-    app.kubernetes.io/component: rbac
-    app.kubernetes.io/created-by: ui-backend
-    app.kubernetes.io/instance: leader-election-role
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: role
-    app.kubernetes.io/part-of: ui-backend
-  name: ui-backend-leader-election-role
-  namespace: projectsveltos
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: ui-backend-controller-role
 rules:
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - authentication.k8s.io
   resources:
@@ -112,27 +75,6 @@ rules:
   - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  labels:
-    app.kubernetes.io/component: rbac
-    app.kubernetes.io/created-by: ui-backend
-    app.kubernetes.io/instance: leader-election-rolebinding
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: rolebinding
-    app.kubernetes.io/part-of: ui-backend
-  name: ui-backend-leader-election-rolebinding
-  namespace: projectsveltos
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: ui-backend-leader-election-role
-subjects:
-- kind: ServiceAccount
-  name: ui-backend-manager
-  namespace: projectsveltos
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
@@ -146,11 +88,25 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: manager-role
+  name: ui-backend-controller-role
 subjects:
 - kind: ServiceAccount
   name: ui-backend-manager
   namespace: projectsveltos
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui-backend-manager
+  namespace: projectsveltos
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    control-plane: ui-backend
+  type: ClusterIP
 ---
 apiVersion: apps/v1
 kind: Deployment

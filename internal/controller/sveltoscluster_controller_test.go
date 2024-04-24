@@ -19,6 +19,7 @@ package controller_test
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -27,6 +28,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2/textlogger"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/ui-backend/internal/controller"
@@ -35,6 +37,7 @@ import (
 
 var _ = Describe("SveltosClusterReconciler", func() {
 	var sveltosCluster *libsveltosv1alpha1.SveltosCluster
+	var logger logr.Logger
 
 	BeforeEach(func() {
 		sveltosCluster = &libsveltosv1alpha1.SveltosCluster{
@@ -46,6 +49,8 @@ var _ = Describe("SveltosClusterReconciler", func() {
 				KubeconfigName: randomString(),
 			},
 		}
+
+		logger = textlogger.NewLogger(textlogger.NewConfig())
 	})
 
 	It("reconcile adds/removes SveltosCluster to/from list of existing clusters", func() {
@@ -59,6 +64,8 @@ var _ = Describe("SveltosClusterReconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
 			WithObjects(initObjects...).Build()
+
+		server.InitializeManagerInstance(c, scheme, httpPort, logger)
 
 		reconciler := getSveltosClusterReconciler(c)
 
@@ -79,7 +86,7 @@ var _ = Describe("SveltosClusterReconciler", func() {
 			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
 		}
 
-		manager := server.GetManagerInstance(c, scheme)
+		manager := server.GetManagerInstance()
 		clusters := manager.GetManagedSveltosClusters()
 		_, ok := clusters[*cluster]
 		Expect(ok).To(BeTrue())

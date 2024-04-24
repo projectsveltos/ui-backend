@@ -74,7 +74,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *ClusterReconciler) removeCAPICluster(clusterNamespace, clusterName string, logger logr.Logger) {
 	logger.V(logs.LogInfo).Info("Reconciling Cluster delete")
 
-	manager := server.GetManagerInstance(r.Client, r.Scheme)
+	manager := server.GetManagerInstance()
 
 	manager.RemoveCAPICluster(clusterNamespace, clusterName)
 
@@ -84,7 +84,7 @@ func (r *ClusterReconciler) removeCAPICluster(clusterNamespace, clusterName stri
 func (r *ClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster, logger logr.Logger) {
 	logger.V(logs.LogInfo).Info("Reconciling Cluster normal")
 
-	manager := server.GetManagerInstance(r.Client, r.Scheme)
+	manager := server.GetManagerInstance()
 
 	manager.AddCAPICluster(cluster)
 
@@ -94,7 +94,6 @@ func (r *ClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster, logger l
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		// Uncomment the following line adding a pointer to an instance of the controlled resource as an argument
-		// For().
+		For(&clusterv1.Cluster{}).
 		Complete(r)
 }
