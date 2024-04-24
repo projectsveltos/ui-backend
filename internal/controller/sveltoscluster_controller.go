@@ -77,7 +77,7 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 func (r *SveltosClusterReconciler) removeSveltosCluster(sveltosClusterNamespace, sveltosClusterName string, logger logr.Logger) {
 	logger.V(logs.LogInfo).Info("Reconciling SveltosCluster delete")
 
-	manager := server.GetManagerInstance(r.Client, r.Scheme)
+	manager := server.GetManagerInstance()
 
 	manager.RemoveSveltosCluster(sveltosClusterNamespace, sveltosClusterName)
 
@@ -87,7 +87,7 @@ func (r *SveltosClusterReconciler) removeSveltosCluster(sveltosClusterNamespace,
 func (r *SveltosClusterReconciler) reconcileNormal(sveltosCluster *libsveltosv1alpha1.SveltosCluster, logger logr.Logger) {
 	logger.V(logs.LogInfo).Info("Reconciling SveltosCluster normal")
 
-	manager := server.GetManagerInstance(r.Client, r.Scheme)
+	manager := server.GetManagerInstance()
 
 	manager.AddSveltosCluster(sveltosCluster)
 

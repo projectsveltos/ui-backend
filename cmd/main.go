@@ -57,6 +57,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/ui-backend/internal/controller"
+	"github.com/projectsveltos/ui-backend/internal/server"
 )
 
 var (
@@ -69,6 +70,7 @@ var (
 	syncPeriod           time.Duration
 	healthAddr           string
 	profilerAddress      string
+	httpPort             string
 )
 
 const (
@@ -80,6 +82,9 @@ const (
 // Add RBAC for the authorized diagnostics endpoint.
 // +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
 // +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
+
+// Add RBAC to detect if ClusterAPI is installed
+//+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 
 func main() {
 	scheme, err := controller.InitScheme()
@@ -136,6 +141,8 @@ func main() {
 
 	go startClusterController(ctx, mgr, setupLog)
 
+	server.InitializeManagerInstance(mgr.GetClient(), scheme, httpPort, ctrl.Log.WithName("gin"))
+
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
@@ -154,6 +161,9 @@ func initFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&profilerAddress, "profiler-address", "",
 		"Bind address to expose the pprof profiler (e.g. localhost:6060)")
+
+	fs.StringVar(&httpPort, "http-port", ":8080",
+		"The service port (e.g. :8080)")
 
 	fs.IntVar(&concurrentReconciles, "concurrent-reconciles", defaultReconcilers,
 		"concurrent reconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 10")

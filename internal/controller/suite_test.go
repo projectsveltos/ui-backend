@@ -37,6 +37,10 @@ var (
 	scheme *runtime.Scheme
 )
 
+const (
+	httpPort = ":8080"
+)
+
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Controllers Suite")

@@ -5,6 +5,14 @@ metadata:
   name: controller-role
 rules:
 - apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - authentication.k8s.io
   resources:
   - tokenreviews

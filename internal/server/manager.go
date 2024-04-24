@@ -24,14 +24,16 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-logr/logr"
+
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 type ClusterInfo struct {
-	Labels         map[string]string
-	Version        string
-	Ready          bool
-	FailureMessage *string
+	Labels         map[string]string `json:"labels"`
+	Version        string            `json:"version"`
+	Ready          bool              `json:"ready"`
+	FailureMessage *string           `json:"failureMessage"`
 }
 
 type instance struct {
@@ -48,8 +50,8 @@ var (
 	lock            = &sync.Mutex{}
 )
 
-// GetManagerInstance return manager instance
-func GetManagerInstance(c client.Client, scheme *runtime.Scheme) *instance {
+// InitializeManagerInstance initializes manager instance
+func InitializeManagerInstance(c client.Client, scheme *runtime.Scheme, port string, logger logr.Logger) {
 	if managerInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()
@@ -61,9 +63,15 @@ func GetManagerInstance(c client.Client, scheme *runtime.Scheme) *instance {
 				clusterMux:      sync.Mutex{},
 				scheme:          scheme,
 			}
+
+			go func() {
+				managerInstance.start(port, logger)
+			}()
 		}
 	}
+}
 
+func GetManagerInstance() *instance {
 	return managerInstance
 }
 
