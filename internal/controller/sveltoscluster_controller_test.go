@@ -65,7 +65,9 @@ var _ = Describe("SveltosClusterReconciler", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
 			WithObjects(initObjects...).Build()
 
-		server.InitializeManagerInstance(c, scheme, httpPort, logger)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		server.InitializeManagerInstance(ctx, c, scheme, httpPort, logger)
 
 		reconciler := getSveltosClusterReconciler(c)
 
@@ -74,7 +76,7 @@ var _ = Describe("SveltosClusterReconciler", func() {
 			Namespace: sveltosCluster.Namespace,
 		}
 
-		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
+		_, err := reconciler.Reconcile(ctx, ctrl.Request{
 			NamespacedName: sveltosClusterName,
 		})
 		Expect(err).ToNot(HaveOccurred())
@@ -92,9 +94,9 @@ var _ = Describe("SveltosClusterReconciler", func() {
 		Expect(ok).To(BeTrue())
 
 		// Delete SveltosCluster
-		Expect(c.Delete(context.TODO(), sveltosCluster)).To(Succeed())
+		Expect(c.Delete(ctx, sveltosCluster)).To(Succeed())
 
-		_, err = reconciler.Reconcile(context.TODO(), ctrl.Request{
+		_, err = reconciler.Reconcile(ctx, ctrl.Request{
 			NamespacedName: sveltosClusterName,
 		})
 		Expect(err).ToNot(HaveOccurred())

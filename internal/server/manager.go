@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"context"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
@@ -51,7 +52,9 @@ var (
 )
 
 // InitializeManagerInstance initializes manager instance
-func InitializeManagerInstance(c client.Client, scheme *runtime.Scheme, port string, logger logr.Logger) {
+func InitializeManagerInstance(ctx context.Context, c client.Client, scheme *runtime.Scheme,
+	port string, logger logr.Logger) {
+
 	if managerInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()
@@ -65,7 +68,7 @@ func InitializeManagerInstance(c client.Client, scheme *runtime.Scheme, port str
 			}
 
 			go func() {
-				managerInstance.start(port, logger)
+				managerInstance.start(ctx, port, logger)
 			}()
 		}
 	}

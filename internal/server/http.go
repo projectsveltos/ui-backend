@@ -17,6 +17,8 @@ limitations under the License.
 package server
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"syscall"
 
@@ -59,7 +61,7 @@ var (
 	}
 )
 
-func (m *instance) start(port string, logger logr.Logger) {
+func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	ginLogger = logger
 
 	gin.SetMode(gin.ReleaseMode)
@@ -68,11 +70,24 @@ func (m *instance) start(port string, logger logr.Logger) {
 	r.GET("/capiclusters", getManagedCAPIClusters)
 	r.GET("/sveltosclusters", getManagedSveltosClusters)
 
-	err := r.Run(port)
-	if err != nil {
-		ginLogger.V(logs.LogInfo).Info("run failed: %v", err)
+	errCh := make(chan error)
+
+	go func() {
+		err := r.Run(port)
+		errCh <- err // Send the error on the channel
+		ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("run failed: %v", err))
 		if killErr := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); killErr != nil {
 			panic("kill -TERM failed")
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			ginLogger.V(logs.LogInfo).Info("context canceled")
+			return
+		case <-errCh:
+			return
 		}
 	}
 }
