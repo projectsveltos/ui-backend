@@ -17,7 +17,11 @@ limitations under the License.
 package server_test
 
 import (
+	"context"
+	"fmt"
+	"math/rand"
 	"reflect"
+	"time"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -36,8 +40,17 @@ import (
 
 const (
 	k8sVersion = "v1.29.0"
-	httpPort   = ":8080"
 )
+
+func randomPort() string {
+	source := rand.NewSource(time.Now().UnixNano())
+	//nolint: gosec // this is just a test
+	rng := rand.New(source)
+
+	// Generate a random number between 8080 and 20000
+	randomNumber := rng.Intn(20000-8080) + 8080
+	return fmt.Sprintf(":%d", randomNumber)
+}
 
 var _ = Describe("Manager", func() {
 	var sveltosCluster *libsveltosv1alpha1.SveltosCluster
@@ -103,7 +116,10 @@ var _ = Describe("Manager", func() {
 			FailureMessage: sveltosCluster.Status.FailureMessage,
 		}
 
-		server.InitializeManagerInstance(c, scheme, httpPort, logger)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
 		manager := server.GetManagerInstance()
 		manager.AddSveltosCluster(sveltosCluster)
 
@@ -121,7 +137,10 @@ var _ = Describe("Manager", func() {
 			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
 		}
 
-		server.InitializeManagerInstance(c, scheme, httpPort, logger)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
 		manager := server.GetManagerInstance()
 		manager.AddSveltosCluster(sveltosCluster)
 
@@ -156,7 +175,10 @@ var _ = Describe("Manager", func() {
 			FailureMessage: cluster.Status.FailureMessage,
 		}
 
-		server.InitializeManagerInstance(c, scheme, httpPort, logger)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
 		manager := server.GetManagerInstance()
 		manager.AddCAPICluster(cluster)
 
@@ -174,7 +196,10 @@ var _ = Describe("Manager", func() {
 			APIVersion: clusterv1.GroupVersion.String(),
 		}
 
-		server.InitializeManagerInstance(c, scheme, httpPort, logger)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
 		manager := server.GetManagerInstance()
 		manager.AddCAPICluster(cluster)
 

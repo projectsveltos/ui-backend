@@ -141,7 +141,8 @@ func main() {
 
 	go startClusterController(ctx, mgr, setupLog)
 
-	server.InitializeManagerInstance(mgr.GetClient(), scheme, httpPort, ctrl.Log.WithName("gin"))
+	server.InitializeManagerInstance(ctx, mgr.GetClient(), scheme,
+		httpPort, ctrl.Log.WithName("gin"))
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
