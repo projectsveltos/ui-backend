@@ -17,5 +17,21 @@ limitations under the License.
 package server
 
 var (
-	GetLimitedClusters = getLimitedClusters
+	GetClustersInRange = getClustersInRange
 )
+
+var (
+	GetClusterFiltersFromQuery = getClusterFiltersFromQuery
+)
+
+func GetNamespaceFilter(f clusterFilters) string {
+	return f.Namespace
+}
+
+func GetNameFilter(f clusterFilters) string {
+	return f.name
+}
+
+func GetLabelFilter(f clusterFilters) string {
+	return f.labelSelector.String()
+}
