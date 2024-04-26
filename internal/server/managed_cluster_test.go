@@ -17,9 +17,14 @@ limitations under the License.
 package server_test
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"sort"
 
+	"github.com/gin-gonic/gin"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -66,7 +71,7 @@ var _ = Describe("ManageClusters", func() {
 
 		limit := 1
 		skip := 3
-		result, err := server.GetLimitedClusters(managedClusters, limit, skip)
+		result, err := server.GetClustersInRange(managedClusters, limit, skip)
 		Expect(err).To(BeNil())
 		for i := 0; i < limit; i++ {
 			Expect(reflect.DeepEqual(result[i], managedClusters[skip+i]))
@@ -74,7 +79,7 @@ var _ = Describe("ManageClusters", func() {
 
 		limit = 3
 		skip = 5
-		result, err = server.GetLimitedClusters(managedClusters, limit, skip)
+		result, err = server.GetClustersInRange(managedClusters, limit, skip)
 		Expect(err).To(BeNil())
 		for i := 0; i < limit; i++ {
 			Expect(reflect.DeepEqual(result[i], managedClusters[skip+i]))
@@ -82,7 +87,7 @@ var _ = Describe("ManageClusters", func() {
 
 		limit = 3
 		skip = 9
-		result, err = server.GetLimitedClusters(managedClusters, limit, skip)
+		result, err = server.GetClustersInRange(managedClusters, limit, skip)
 		Expect(err).To(BeNil())
 		// limit is 3 but skip starts from 9. Original number of clusters is 10. So expect only 1 cluster
 		Expect(len(result)).To(Equal(1))
@@ -90,7 +95,45 @@ var _ = Describe("ManageClusters", func() {
 
 		limit = 3
 		skip = 11
-		_, err = server.GetLimitedClusters(managedClusters, limit, skip)
+		_, err = server.GetClustersInRange(managedClusters, limit, skip)
 		Expect(err).ToNot(BeNil())
+	})
+
+	It("getClusterFiltersFromQuery returns cluster filters", func() {
+		namespace := randomString()
+		name := randomString()
+
+		data := map[string]string{
+			randomString():                  randomString(),
+			randomString():                  randomString(),
+			"cluster.x-k8s.io/cluster-name": "clusterapi-workload",
+		}
+
+		var encodedLabels string
+		for k := range data {
+			if encodedLabels != "" {
+				encodedLabels += "," // Or another separator like '|'
+			}
+			encodedLabels += fmt.Sprintf("%s:%s", url.QueryEscape(k), url.QueryEscape(data[k]))
+		}
+
+		url := fmt.Sprintf("/capiclusters?namespace=%s", namespace)
+		url += fmt.Sprintf("&name=%s", name)
+		url += fmt.Sprintf("&labels=%s", encodedLabels)
+
+		req, err := http.NewRequest(http.MethodGet, url, http.NoBody)
+		Expect(err).To(BeNil())
+		req.Header.Set("Content-Type", "application/json")
+
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = req
+
+		filters, err := server.GetClusterFiltersFromQuery(c)
+		Expect(err).To(BeNil())
+
+		Expect(server.GetNamespaceFilter(*filters)).To(Equal(namespace))
+		Expect(server.GetNameFilter(*filters)).To(Equal(name))
 	})
 })

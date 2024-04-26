@@ -22,11 +22,13 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
@@ -43,19 +45,32 @@ var (
 
 		limit, skip := getLimitAndSkipFromQuery(c)
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
-
-		manager := GetManagerInstance()
-		clusters := manager.GetManagedCAPIClusters()
-		managedClusterData := getManagedClusterData(clusters)
-		sort.Sort(managedClusterData)
-
-		result, err := getLimitedClusters(managedClusterData, limit, skip)
+		filters, err := getClusterFiltersFromQuery(c)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
 		}
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: namespace %q name %q labels %q",
+			filters.Namespace, filters.name, filters.labelSelector))
+
+		manager := GetManagerInstance()
+		clusters := manager.GetManagedCAPIClusters()
+		managedClusterData := getManagedClusterData(clusters, filters)
+		sort.Sort(managedClusterData)
+
+		result, err := getClustersInRange(managedClusterData, limit, skip)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+		}
+
+		response := ClusterResult{
+			TotalClusters:   len(managedClusterData),
+			ManagedClusters: result,
+		}
+
 		// Return JSON response
-		c.JSON(http.StatusOK, result)
+		c.JSON(http.StatusOK, response)
 	}
 
 	getManagedSveltosClusters = func(c *gin.Context) {
@@ -63,26 +78,38 @@ var (
 
 		limit, skip := getLimitAndSkipFromQuery(c)
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
+		filters, err := getClusterFiltersFromQuery(c)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+		}
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: namespace %q name %q labels %q",
+			filters.Namespace, filters.name, filters.labelSelector))
 
 		manager := GetManagerInstance()
 		clusters := manager.GetManagedSveltosClusters()
-		managedClusterData := getManagedClusterData(clusters)
-		result, err := getLimitedClusters(managedClusterData, limit, skip)
+		managedClusterData := getManagedClusterData(clusters, filters)
+		result, err := getClustersInRange(managedClusterData, limit, skip)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
 		}
 
+		response := ClusterResult{
+			TotalClusters:   len(managedClusterData),
+			ManagedClusters: result,
+		}
+
 		// Return JSON response
-		c.JSON(http.StatusOK, result)
+		c.JSON(http.StatusOK, response)
 	}
 )
 
 func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	ginLogger = logger
 
-	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
 
 	r.GET("/capiclusters", getManagedCAPIClusters)
 	r.GET("/sveltosclusters", getManagedSveltosClusters)
@@ -109,16 +136,34 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	}
 }
 
-func getManagedClusterData(clusters map[corev1.ObjectReference]ClusterInfo) ManagedClusters {
-	data := make(ManagedClusters, len(clusters))
-	i := 0
+func getManagedClusterData(clusters map[corev1.ObjectReference]ClusterInfo, filters *clusterFilters,
+) ManagedClusters {
+
+	data := make(ManagedClusters, 0)
 	for k := range clusters {
-		data[i] = ManagedCluster{
+		if filters.Namespace != "" {
+			if !strings.Contains(k.Namespace, filters.Namespace) {
+				continue
+			}
+		}
+
+		if filters.name != "" {
+			if !strings.Contains(k.Name, filters.name) {
+				continue
+			}
+		}
+
+		if !filters.labelSelector.Empty() {
+			if !filters.labelSelector.Matches(labels.Set(clusters[k].Labels)) {
+				continue
+			}
+		}
+
+		data = append(data, ManagedCluster{
 			Namespace:   k.Namespace,
 			Name:        k.Name,
 			ClusterInfo: clusters[k],
-		}
-		i++
+		})
 	}
 
 	return data
