@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -103,6 +104,75 @@ var (
 		// Return JSON response
 		c.JSON(http.StatusOK, response)
 	}
+
+	getDeployedHelmCharts = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get deployed HelmCharts")
+
+		namespace, name, clusterType := getClusterFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
+
+		limit, skip := getLimitAndSkipFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
+
+		manager := GetManagerInstance()
+		helmCharts, err := manager.getHelmChartsForCluster(c.Request.Context(),
+			namespace, name, clusterType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+		}
+		sort.Slice(helmCharts, func(i, j int) bool {
+			return helmCharts[i].LastAppliedTime.Before(helmCharts[j].LastAppliedTime)
+		})
+
+		result, err := getHelmReleaseInRange(helmCharts, limit, skip)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+		}
+
+		response := HelmReleaseResult{
+			TotalHelmReleases: len(helmCharts),
+			HelmReleases:      result,
+		}
+
+		// Return JSON response
+		c.JSON(http.StatusOK, response)
+	}
+
+	getDeployedResources = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get deployed Kubernetes resources")
+
+		limit, skip := getLimitAndSkipFromQuery(c)
+		namespace, name, clusterType := getClusterFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
+
+		manager := GetManagerInstance()
+		resources, err := manager.getResourcesForCluster(c.Request.Context(),
+			namespace, name, clusterType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+		}
+		sort.Slice(resources, func(i, j int) bool {
+			return resources[i].LastAppliedTime.Before(resources[j].LastAppliedTime)
+		})
+
+		result, err := getResourcesInRange(resources, limit, skip)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+		}
+
+		response := ResourceResult{
+			TotalResources: len(resources),
+			Resources:      result,
+		}
+
+		// Return JSON response
+		c.JSON(http.StatusOK, response)
+	}
 )
 
 func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
@@ -111,8 +181,14 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r := gin.Default()
 	gin.SetMode(gin.ReleaseMode)
 
+	// Return managed ClusterAPI powered clusters
 	r.GET("/capiclusters", getManagedCAPIClusters)
+	// Return SveltosClusters
 	r.GET("/sveltosclusters", getManagedSveltosClusters)
+	// Return helm charts deployed in a given managed cluster
+	r.GET("/helmcharts", getDeployedHelmCharts)
+	// Return resources deployed in a given managed cluster
+	r.GET("/resources", getDeployedResources)
 
 	errCh := make(chan error)
 
@@ -195,5 +271,35 @@ func getLimitAndSkipFromQuery(c *gin.Context) (limit, skip int) {
 		}
 	}
 
+	return
+}
+
+func getClusterFromQuery(c *gin.Context) (namespace, name string, clusterType libsveltosv1alpha1.ClusterType) {
+	// Get the values from query parameters
+	queryNamespace := c.Query("namespace")
+	queryName := c.Query("name")
+	queryType := c.Query("type")
+
+	// Parse the query parameters to int (handle errors)
+	if queryNamespace == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace is required"})
+		return
+	}
+	if queryName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		return
+	}
+	if queryType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cluster type is required"})
+		return
+	}
+
+	if strings.EqualFold(queryType, string(libsveltosv1alpha1.ClusterTypeSveltos)) {
+		return queryNamespace, queryName, libsveltosv1alpha1.ClusterTypeSveltos
+	} else if strings.EqualFold(queryType, string(libsveltosv1alpha1.ClusterTypeCapi)) {
+		return queryNamespace, queryName, libsveltosv1alpha1.ClusterTypeCapi
+	}
+
+	c.JSON(http.StatusBadRequest, gin.H{"error": "cluster type is incorrect"})
 	return
 }

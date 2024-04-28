@@ -41,6 +41,14 @@ rules:
   - list
   - watch
 - apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - lib.projectsveltos.io
   resources:
   - debuggingconfigurations
