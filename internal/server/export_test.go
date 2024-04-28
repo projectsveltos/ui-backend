@@ -17,7 +17,9 @@ limitations under the License.
 package server
 
 var (
-	GetClustersInRange = getClustersInRange
+	GetClustersInRange    = getClustersInRange
+	GetHelmReleaseInRange = getHelmReleaseInRange
+	GetResourcesInRange   = getResourcesInRange
 )
 
 var (

@@ -68,7 +68,7 @@ KIND := $(TOOLS_BIN_DIR)/kind
 KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 
 GOLANGCI_LINT_VERSION := "v1.55.2"
-CLUSTERCTL_VERSION := "v1.7.0"
+CLUSTERCTL_VERSION := "v1.7.1"
 
 KUSTOMIZE_VER := v4.5.2
 KUSTOMIZE_BIN := kustomize
@@ -252,6 +252,8 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	@echo 'Install libsveltos CRDs'
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_sveltosclusters.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_clustersets.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_sets.yaml
 
 	@echo 'Install register-mgmt-cluster' 
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/register-mgmt-cluster/$(TAG)/manifest/manifest.yaml
@@ -260,6 +262,9 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	@echo 'Install projectsveltos ui-backend-manager components'
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) | $(KUBECTL) apply -f-
+
+	# Install addon-controller
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/addon-controller/$(TAG)/manifest/manifest.yaml
 
 	# Install sveltoscluster-manager
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltoscluster-manager/$(TAG)/manifest/manifest.yaml
