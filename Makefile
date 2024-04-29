@@ -258,16 +258,16 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	@echo 'Install register-mgmt-cluster' 
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/register-mgmt-cluster/$(TAG)/manifest/manifest.yaml
 
-	# Install projectsveltos ui-backend components
-	@echo 'Install projectsveltos ui-backend-manager components'
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | $(ENVSUBST) | $(KUBECTL) apply -f-
-
 	# Install addon-controller
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/addon-controller/$(TAG)/manifest/manifest.yaml
 
 	# Install sveltoscluster-manager
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltoscluster-manager/$(TAG)/manifest/manifest.yaml
+
+	# Install projectsveltos ui-backend components
+	@echo 'Install projectsveltos ui-backend-manager components'
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/default | $(ENVSUBST) | $(KUBECTL) apply -f-
 
 	@echo "Waiting for projectsveltos ui-backend to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/ui-backend-manager -n projectsveltos --timeout=$(TIMEOUT)
