@@ -274,6 +274,10 @@ func addDeployedResourcesForFeature(profileName string,
 }
 
 func getHelmReleaseInRange(helmReleases []HelmRelease, limit, skip int) ([]HelmRelease, error) {
+	if len(helmReleases) == 0 {
+		return helmReleases, nil
+	}
+
 	if skip < 0 {
 		return nil, errors.New("skip cannot be negative")
 	}
@@ -295,6 +299,10 @@ func getHelmReleaseInRange(helmReleases []HelmRelease, limit, skip int) ([]HelmR
 }
 
 func getResourcesInRange(resources []Resource, limit, skip int) ([]Resource, error) {
+	if len(resources) == 0 {
+		return resources, nil
+	}
+
 	if skip < 0 {
 		return nil, errors.New("skip cannot be negative")
 	}

@@ -47,6 +47,10 @@ func (s ManagedClusters) Less(i, j int) bool {
 }
 
 func getClustersInRange(clusters ManagedClusters, limit, skip int) (ManagedClusters, error) {
+	if len(clusters) == 0 {
+		return clusters, nil
+	}
+
 	if skip < 0 {
 		return nil, errors.New("skip cannot be negative")
 	}
