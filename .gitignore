@@ -31,3 +31,6 @@ manager_pull_policy.yaml-e
 manager_auth_proxy_patch.yaml-e
 
 version.txt
+
+# vs code
+.vscode

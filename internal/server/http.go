@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
@@ -173,6 +174,37 @@ var (
 		// Return JSON response
 		c.JSON(http.StatusOK, response)
 	}
+
+	getClusterStatus = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get deployed Kubernetes resources")
+
+		limit, skip := getLimitAndSkipFromQuery(c)
+		namespace, name, clusterType := getClusterFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
+
+		manager := GetManagerInstance()
+		clusterProfileStatuses := manager.GetClusterProfileStatusesByCluster(&namespace, &name)
+		profiles := make(map[string][]configv1alpha1.FeatureSummary, len(clusterProfileStatuses))
+
+		for _, clusterProfileStatus := range clusterProfileStatuses {
+			if _, ok := profiles[*clusterProfileStatus.Name]; !ok {
+				profiles[*clusterProfileStatus.Name] = make([]configv1alpha1.FeatureSummary, 0)
+			}
+
+			for _, summary := range clusterProfileStatus.Summary {
+				// Add it only if the status is not Provisioned (includes removed as well)
+				if _, ok := failingClusterSummaryTypes[summary.Status]; !ok {
+					profiles[*clusterProfileStatus.Name] = append(profiles[*clusterProfileStatus.Name], summary)
+				}
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"clusterName": name,
+			"profiles":    profiles,
+		})
+	}
 )
 
 func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
@@ -189,6 +221,8 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/helmcharts", getDeployedHelmCharts)
 	// Return resources deployed in a given managed cluster
 	r.GET("/resources", getDeployedResources)
+	// Return the specified cluster status
+	r.GET("/getClusterStatus", getClusterStatus)
 
 	errCh := make(chan error)
 
