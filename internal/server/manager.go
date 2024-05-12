@@ -18,7 +18,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
@@ -192,7 +191,6 @@ func (m *instance) RemoveCAPICluster(clusterNamespace, clusterName string) {
 }
 
 func (m *instance) AddClusterProfileStatus(summary *configv1alpha1.ClusterSummary) {
-
 	if !isClusterSummary(summary) {
 		return
 	}

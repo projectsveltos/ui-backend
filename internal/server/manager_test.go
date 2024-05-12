@@ -74,7 +74,11 @@ func createTestCAPICluster(namespace, name string) *clusterv1.Cluster {
 	}
 }
 
-func createTestClusterSummary(name, namespace, clusterNamespace, clusterName string, featureSummaries []configv1alpha1.FeatureSummary) *configv1alpha1.ClusterSummary {
+func createTestClusterSummary(
+	name, namespace, clusterNamespace, clusterName string,
+	featureSummaries []configv1alpha1.FeatureSummary,
+) *configv1alpha1.ClusterSummary {
+
 	return &configv1alpha1.ClusterSummary{
 		TypeMeta: metav1.TypeMeta{
 			Kind: configv1alpha1.ClusterSummaryKind,
