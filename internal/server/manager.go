@@ -245,7 +245,6 @@ func getKeyFromObject(scheme *runtime.Scheme, obj client.Object) *corev1.ObjectR
 func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) {
 	gvks, _, err := scheme.ObjectKinds(obj)
 	if err != nil {
-		fmt.Println(err)
 		panic(1)
 	}
 
