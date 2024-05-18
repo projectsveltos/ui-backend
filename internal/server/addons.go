@@ -274,6 +274,7 @@ func addDeployedResourcesForFeature(profileName string,
 }
 
 func getSliceInRange[T any](items []T, limit, skip int) ([]T, error) {
+  
 	if skip < 0 {
 		return nil, errors.New("skip cannot be negative")
 	}
