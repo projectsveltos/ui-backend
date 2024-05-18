@@ -124,6 +124,7 @@ func (m *instance) GetClusterProfileStatusesByCluster(
 	clusterNamespace,
 	clusterName *string,
 	clusterType libsveltosv1alpha1.ClusterType) []ClusterProfileStatus {
+
 	m.clusterStatusesMux.Lock()
 	defer m.clusterStatusesMux.Unlock()
 
@@ -277,7 +278,6 @@ func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) {
 }
 
 func verifyLabelConfiguration(summary *configv1alpha1.ClusterSummary) bool {
-
 	if summary.Labels == nil {
 		return false
 	}
