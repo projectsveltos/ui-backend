@@ -317,7 +317,7 @@ func getSveltosClusterReconciler(mgr manager.Manager) *controller.SveltosCluster
 }
 
 func startClusterSummaryController(mgr manager.Manager) {
-	clusterSummaryReconciler := getClusterSummaryRiconciler(mgr)
+	clusterSummaryReconciler := getClusterSummaryReconciler(mgr)
 	err := clusterSummaryReconciler.SetupWithManager(mgr)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterSummary")
@@ -325,7 +325,7 @@ func startClusterSummaryController(mgr manager.Manager) {
 	}
 }
 
-func getClusterSummaryRiconciler(mgr manager.Manager) *controller.ClusterSummaryReconciler {
+func getClusterSummaryReconciler(mgr manager.Manager) *controller.ClusterSummaryReconciler {
 	return &controller.ClusterSummaryReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),

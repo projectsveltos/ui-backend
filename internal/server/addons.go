@@ -273,44 +273,65 @@ func addDeployedResourcesForFeature(profileName string,
 	}
 }
 
-func getHelmReleaseInRange(helmReleases []HelmRelease, limit, skip int) ([]HelmRelease, error) {
+func getSliceInRange[T any](items []T, limit, skip int) ([]T, error) {
 	if skip < 0 {
 		return nil, errors.New("skip cannot be negative")
 	}
 	if limit < 0 {
 		return nil, errors.New("limit cannot be negative")
 	}
-	if skip >= len(helmReleases) {
+	if skip >= len(items) {
 		return nil, errors.New("skip cannot be greater than or equal to the length of the slice")
 	}
 
 	// Adjust limit based on slice length and skip
 	adjustedLimit := limit
-	if skip+limit > len(helmReleases) {
-		adjustedLimit = len(helmReleases) - skip
+	if skip+limit > len(items) {
+		adjustedLimit = len(items) - skip
 	}
 
 	// Use slicing to extract the desired sub-slice
-	return helmReleases[skip : skip+adjustedLimit], nil
+	return items[skip : skip+adjustedLimit], nil
+}
+
+// getMapInRange extracts a subset of key-value pairs from the given map, skipping the first 'skip' pairs and then taking up to 'limit' pairs.
+func getMapInRange[K comparable, V any](m map[K]V, limit, skip int) (map[K]V, error) {
+	if skip < 0 {
+		return nil, errors.New("skip cannot be negative")
+	}
+	if limit < 0 {
+		return nil, errors.New("limit cannot be negative")
+	}
+	if skip >= len(m) {
+		return nil, errors.New("skip cannot be greater than or equal to the length of the map")
+	}
+
+	// Create a new map for the result
+	result := make(map[K]V)
+
+	// Iterate over the map and collect the desired key-value pairs
+	count := 0
+	for k, v := range m {
+		if count >= skip && count < skip+limit {
+			result[k] = v
+		}
+		if count >= skip+limit {
+			break
+		}
+		count++
+	}
+
+	return result, nil
+}
+
+func getHelmReleaseInRange(helmReleases []HelmRelease, limit, skip int) ([]HelmRelease, error) {
+	return getSliceInRange(helmReleases, limit, skip)
 }
 
 func getResourcesInRange(resources []Resource, limit, skip int) ([]Resource, error) {
-	if skip < 0 {
-		return nil, errors.New("skip cannot be negative")
-	}
-	if limit < 0 {
-		return nil, errors.New("limit cannot be negative")
-	}
-	if skip >= len(resources) {
-		return nil, errors.New("skip cannot be greater than or equal to the length of the slice")
-	}
+	return getSliceInRange(resources, limit, skip)
+}
 
-	// Adjust limit based on slice length and skip
-	adjustedLimit := limit
-	if skip+limit > len(resources) {
-		adjustedLimit = len(resources) - skip
-	}
-
-	// Use slicing to extract the desired sub-slice
-	return resources[skip : skip+adjustedLimit], nil
+func getProfileStatusesInRange(profileStatuses map[string][]ClusterFeatureSummary, limit, skip int) (map[string][]ClusterFeatureSummary, error) {
+	return getMapInRange(profileStatuses, limit, skip)
 }

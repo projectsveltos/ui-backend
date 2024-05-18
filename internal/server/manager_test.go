@@ -79,29 +79,38 @@ func createTestClusterSummary(
 	featureSummaries []configv1alpha1.FeatureSummary,
 ) *configv1alpha1.ClusterSummary {
 
-	return &configv1alpha1.ClusterSummary{
+	clSum := &configv1alpha1.ClusterSummary{
 		TypeMeta: metav1.TypeMeta{
 			Kind: configv1alpha1.ClusterSummaryKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
-			Labels: map[string]string{ // TODO: I didn't get where to get this cluster-profile label name (same as in isClusterSummary)...
-				"projectsveltos.io/cluster-profile-name": randomString(),
-				configv1alpha1.ClusterNameLabel:          clusterName,
-				configv1alpha1.ClusterTypeLabel:          randomString(),
+			Labels: map[string]string{
+				configv1alpha1.ClusterNameLabel: clusterName,
+				configv1alpha1.ClusterTypeLabel: randomString(),
 			},
 		},
 		Spec: configv1alpha1.ClusterSummarySpec{
 			ClusterNamespace:   clusterNamespace,
 			ClusterName:        clusterName,
-			ClusterType:        clusterv1.ClusterKind,
+			ClusterType:        libsveltosv1alpha1.ClusterTypeCapi,
 			ClusterProfileSpec: configv1alpha1.Spec{},
 		},
 		Status: configv1alpha1.ClusterSummaryStatus{
 			FeatureSummaries: featureSummaries,
 		},
 	}
+
+	ownerRef := metav1.OwnerReference{
+		Name:       "properSummary",
+		Kind:       configv1alpha1.ClusterProfileKind,
+		APIVersion: configv1alpha1.GroupVersion.Group + "/randomv1",
+	}
+
+	clSum.OwnerReferences = append(clSum.OwnerReferences, ownerRef)
+
+	return clSum
 }
 
 var _ = Describe("Manager", func() {
@@ -295,12 +304,12 @@ var _ = Describe("Manager", func() {
 			APIVersion: configv1alpha1.GroupVersion.String(),
 		}
 
-		clusterProfileName := properClusterSummary.Labels["projectsveltos.io/cluster-profile-name"]
 		properClusterProfileStatus := server.ClusterProfileStatus{
-			Name:        &clusterProfileName,
+			Name:        &properClusterSummary.Name,
 			Namespace:   &properClusterSummary.Namespace,
+			ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
 			ClusterName: &properClusterSummary.Spec.ClusterName,
-			Summary:     properClusterSummary.Status.FeatureSummaries,
+			Summary:     server.MapToClusterFeatureSummaries(&properClusterSummary.Status.FeatureSummaries),
 		}
 
 		noLabelsClusterSummaryRef := &corev1.ObjectReference{
@@ -376,12 +385,13 @@ var _ = Describe("Manager", func() {
 		clusterProfileStatuses := manager.GetClusterProfileStatusesByCluster(
 			&cluster.Namespace,
 			&cluster.Name,
+			libsveltosv1alpha1.ClusterTypeCapi,
 		)
 
 		Expect(len(clusterProfileStatuses) == 1).To(BeTrue())
 		// the remaining cluster profile must be the one specified by the proper cluster summary
 		// as it is the only one that belongs to the cluster with Namespace cluster.Namespace and
 		// Name cluster.Name
-		Expect(*clusterProfileStatuses[0].Name == properClusterSummary.Labels["projectsveltos.io/cluster-profile-name"]).To(BeTrue())
+		Expect(*clusterProfileStatuses[0].Name == properClusterSummary.Name).To(BeTrue())
 	})
 })

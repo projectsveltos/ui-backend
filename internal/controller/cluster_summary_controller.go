@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -19,7 +20,8 @@ import (
 
 type ClusterSummaryReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme               *runtime.Scheme
+	ConcurrentReconciles int
 }
 
 func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -29,6 +31,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	clusterSummary := &configv1alpha1.ClusterSummary{}
 	if err := r.Get(ctx, req.NamespacedName, clusterSummary); err != nil {
 		if apierrors.IsNotFound(err) {
+			r.removeClusterSummary(req.Namespace, req.Name, logger)
 			return reconcile.Result{}, nil
 		}
 		logger.Error(err, "Failed to fetch ClusterSummary")
@@ -72,7 +75,15 @@ func (r *ClusterSummaryReconciler) reconcileNormal(clusterSummary *configv1alpha
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	_, err := ctrl.NewControllerManagedBy(mgr).
 		For(&configv1alpha1.ClusterSummary{}).
-		Complete(r)
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: r.ConcurrentReconciles,
+		}).
+		Build(r)
+	if err != nil {
+		return errors.Wrap(err, "error creating controller")
+	}
+
+	return nil
 }

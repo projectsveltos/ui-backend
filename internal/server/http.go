@@ -30,7 +30,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
@@ -184,25 +183,34 @@ var (
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
 
 		manager := GetManagerInstance()
-		clusterProfileStatuses := manager.GetClusterProfileStatusesByCluster(&namespace, &name)
-		profiles := make(map[string][]configv1alpha1.FeatureSummary, len(clusterProfileStatuses))
+		clusterProfileStatuses := manager.GetClusterProfileStatusesByCluster(&namespace, &name, clusterType)
+		profiles := make(map[string][]ClusterFeatureSummary, len(clusterProfileStatuses))
 
 		for _, clusterProfileStatus := range clusterProfileStatuses {
 			if _, ok := profiles[*clusterProfileStatus.Name]; !ok {
-				profiles[*clusterProfileStatus.Name] = make([]configv1alpha1.FeatureSummary, 0)
+				profiles[*clusterProfileStatus.Name] = make([]ClusterFeatureSummary, 0)
 			}
 
 			for _, summary := range clusterProfileStatus.Summary {
 				// Add it only if the status is not Provisioned (includes removed as well)
-				if _, ok := failingClusterSummaryTypes[summary.Status]; !ok {
-					profiles[*clusterProfileStatus.Name] = append(profiles[*clusterProfileStatus.Name], summary)
+				for _, failingClusterSummaryType := range failingClusterSummaryTypes {
+					if summary.Status == failingClusterSummaryType {
+						profiles[*clusterProfileStatus.Name] = append(profiles[*clusterProfileStatus.Name], summary)
+						break
+					}
 				}
 			}
 		}
 
+		result, err := getProfileStatusesInRange(profiles, limit, skip)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"clusterName": name,
-			"profiles":    profiles,
+			"profiles":    result,
 		})
 	}
 )

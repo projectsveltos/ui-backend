@@ -39,30 +39,37 @@ type ClusterInfo struct {
 }
 
 type ClusterProfileStatus struct {
-	Name        *string                         `json:"name"`
-	Namespace   *string                         `json:"namespace"`
-	ClusterName *string                         `json:"clusterName"`
-	Summary     []configv1alpha1.FeatureSummary `json:"summary"`
+	Name        *string                        `json:"name"`
+	Namespace   *string                        `json:"namespace"`
+	ClusterType libsveltosv1alpha1.ClusterType `json:"clusterType"`
+	ClusterName *string                        `json:"clusterName"`
+	Summary     []ClusterFeatureSummary        `json:"summary"`
+}
+
+type ClusterFeatureSummary struct {
+	FeatureID      configv1alpha1.FeatureID     `json:"featureID"`
+	Status         configv1alpha1.FeatureStatus `json:"status,omitempty"`
+	FailureMessage *string                      `json:"failureMessage,omitempty"`
 }
 
 type instance struct {
 	client             client.Client
 	scheme             *runtime.Scheme
-	clusterMux         sync.Mutex // use a Mutex to update managed Clusters
-	clusterStatusesMux sync.Mutex // mutex to update cached ClusterSummary instances
+	clusterMux         sync.RWMutex // use a Mutex to update managed Clusters
+	clusterStatusesMux sync.RWMutex // mutex to update cached ClusterSummary instances
 
-	sveltosClusters        map[corev1.ObjectReference]ClusterInfo
-	capiClusters           map[corev1.ObjectReference]ClusterInfo
-	clusterProfileStatuses map[corev1.ObjectReference]ClusterProfileStatus
+	sveltosClusters      map[corev1.ObjectReference]ClusterInfo
+	capiClusters         map[corev1.ObjectReference]ClusterInfo
+	clusterSummaryReport map[corev1.ObjectReference]ClusterProfileStatus
 }
 
 var (
 	managerInstance            *instance
 	lock                       = &sync.RWMutex{}
-	failingClusterSummaryTypes = map[configv1alpha1.FeatureStatus]struct{}{
-		configv1alpha1.FeatureStatusFailed:             {},
-		configv1alpha1.FeatureStatusFailedNonRetriable: {},
-		configv1alpha1.FeatureStatusProvisioning:       {},
+	failingClusterSummaryTypes = []configv1alpha1.FeatureStatus{
+		configv1alpha1.FeatureStatusFailed,
+		configv1alpha1.FeatureStatusFailedNonRetriable,
+		configv1alpha1.FeatureStatusProvisioning,
 	}
 )
 
@@ -75,13 +82,13 @@ func InitializeManagerInstance(ctx context.Context, c client.Client, scheme *run
 		defer lock.Unlock()
 		if managerInstance == nil {
 			managerInstance = &instance{
-				client:                 c,
-				sveltosClusters:        make(map[corev1.ObjectReference]ClusterInfo),
-				capiClusters:           make(map[corev1.ObjectReference]ClusterInfo),
-				clusterProfileStatuses: make(map[corev1.ObjectReference]ClusterProfileStatus),
-				clusterMux:             sync.Mutex{},
-				clusterStatusesMux:     sync.Mutex{},
-				scheme:                 scheme,
+				client:               c,
+				sveltosClusters:      make(map[corev1.ObjectReference]ClusterInfo),
+				capiClusters:         make(map[corev1.ObjectReference]ClusterInfo),
+				clusterSummaryReport: make(map[corev1.ObjectReference]ClusterProfileStatus),
+				clusterMux:           sync.RWMutex{},
+				clusterStatusesMux:   sync.RWMutex{},
+				scheme:               scheme,
 			}
 
 			go func() {
@@ -96,32 +103,37 @@ func GetManagerInstance() *instance {
 }
 
 func (m *instance) GetManagedSveltosClusters() map[corev1.ObjectReference]ClusterInfo {
-	lock.RLock()
-	defer lock.RUnlock()
+	m.clusterMux.RLock()
+	defer m.clusterMux.RUnlock()
 	return m.sveltosClusters
 }
 
 func (m *instance) GetManagedCAPIClusters() map[corev1.ObjectReference]ClusterInfo {
-	lock.RLock()
-	defer lock.RUnlock()
+	m.clusterMux.RLock()
+	defer m.clusterMux.RUnlock()
 	return m.capiClusters
 }
 
 func (m *instance) GetClusterProfileStatuses() map[corev1.ObjectReference]ClusterProfileStatus {
-	lock.RLock()
-	defer lock.RUnlock()
-	return m.clusterProfileStatuses
+	m.clusterStatusesMux.RLock()
+	defer m.clusterStatusesMux.RUnlock()
+	return m.clusterSummaryReport
 }
 
-func (m *instance) GetClusterProfileStatusesByCluster(clusterNamespace, clusterName *string) []ClusterProfileStatus {
+func (m *instance) GetClusterProfileStatusesByCluster(
+	clusterNamespace,
+	clusterName *string,
+	clusterType libsveltosv1alpha1.ClusterType) []ClusterProfileStatus {
 	m.clusterStatusesMux.Lock()
 	defer m.clusterStatusesMux.Unlock()
 
 	clusterProfileStatuses := make([]ClusterProfileStatus, 0)
-	for _, clusterProfileStatus := range m.clusterProfileStatuses {
+	for _, clusterProfileStatus := range m.clusterSummaryReport {
 		// since we're sure it is a proper cluster summary => we're sure it has this label
 		if *clusterProfileStatus.Namespace == *clusterNamespace && *clusterProfileStatus.ClusterName == *clusterName {
-			clusterProfileStatuses = append(clusterProfileStatuses, clusterProfileStatus)
+			if clusterProfileStatus.ClusterType == clusterType {
+				clusterProfileStatuses = append(clusterProfileStatuses, clusterProfileStatus)
+			}
 		}
 	}
 
@@ -191,26 +203,32 @@ func (m *instance) RemoveCAPICluster(clusterNamespace, clusterName string) {
 }
 
 func (m *instance) AddClusterProfileStatus(summary *configv1alpha1.ClusterSummary) {
-	if !isClusterSummary(summary) {
+	if !verifyLabelConfiguration(summary) {
 		return
 	}
 
 	// we're sure we're adding a proper cluster summary
 	// get the cluster profile name by using labels
-	// TODO: I didn't get where to get this cluster-profile label name (same as in isClusterSummary)...
-	clusterProfileName := summary.Labels["projectsveltos.io/cluster-profile-name"]
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(summary)
+	if err != nil {
+		return
+	}
+
+	// initialize feature summaries slice
+	clusterFeatureSummaries := MapToClusterFeatureSummaries(&summary.Status.FeatureSummaries)
 
 	clusterProfileStatus := ClusterProfileStatus{
-		Name:        &clusterProfileName,
+		Name:        &profileOwnerRef.Name,
 		Namespace:   &summary.Namespace,
+		ClusterType: summary.Spec.ClusterType,
 		ClusterName: &summary.Spec.ClusterName,
-		Summary:     summary.Status.FeatureSummaries,
+		Summary:     clusterFeatureSummaries,
 	}
 
 	m.clusterStatusesMux.Lock()
 	defer m.clusterStatusesMux.Unlock()
 
-	m.clusterProfileStatuses[*getKeyFromObject(m.scheme, summary)] = clusterProfileStatus
+	m.clusterSummaryReport[*getKeyFromObject(m.scheme, summary)] = clusterProfileStatus
 }
 
 func (m *instance) RemoveClusterProfileStatus(summaryNamespace, summaryName string) {
@@ -223,7 +241,7 @@ func (m *instance) RemoveClusterProfileStatus(summaryNamespace, summaryName stri
 	m.clusterStatusesMux.Lock()
 	defer m.clusterStatusesMux.Unlock()
 
-	delete(m.clusterProfileStatuses, *clusterProfileStatus)
+	delete(m.clusterSummaryReport, *clusterProfileStatus)
 }
 
 // getKeyFromObject returns the Key that can be used in the internal reconciler maps.
@@ -258,9 +276,31 @@ func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) {
 	}
 }
 
-func isClusterSummary(summary *configv1alpha1.ClusterSummary) bool {
-	// TODO: I didn't get where to get this...
-	return summary.Labels["projectsveltos.io/cluster-profile-name"] != "" &&
-		summary.Labels[configv1alpha1.ClusterNameLabel] != "" &&
+func verifyLabelConfiguration(summary *configv1alpha1.ClusterSummary) bool {
+
+	if summary.Labels == nil {
+		return false
+	}
+
+	_, err := configv1alpha1.GetProfileOwnerReference(summary)
+	if err != nil {
+		return false
+	}
+
+	return summary.Labels[configv1alpha1.ClusterNameLabel] != "" &&
 		summary.Labels[configv1alpha1.ClusterTypeLabel] != ""
+}
+
+func MapToClusterFeatureSummaries(featureSummaries *[]configv1alpha1.FeatureSummary) []ClusterFeatureSummary {
+	clusterFeatureSummaries := make([]ClusterFeatureSummary, 0, len(*featureSummaries))
+	for _, featureSummary := range *featureSummaries {
+		clusterFeatureSummary := ClusterFeatureSummary{
+			FeatureID:      featureSummary.FeatureID,
+			Status:         featureSummary.Status,
+			FailureMessage: featureSummary.FailureMessage,
+		}
+		clusterFeatureSummaries = append(clusterFeatureSummaries, clusterFeatureSummary)
+	}
+
+	return clusterFeatureSummaries
 }
