@@ -24,7 +24,6 @@ type ClusterSummaryReconciler struct {
 	ConcurrentReconciles int
 }
 
-//nolint:dupl // same pattern as sveltoscluster_controller, different functions though
 func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(logs.LogInfo).Info("Reconciling")
