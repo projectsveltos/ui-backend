@@ -294,44 +294,10 @@ func getSliceInRange[T any](items []T, limit, skip int) ([]T, error) {
 	return items[skip : skip+adjustedLimit], nil
 }
 
-// getMapInRange extracts a subset of key-value pairs from the given map, skipping the first 'skip' pairs and then taking up to 'limit' pairs.
-func getMapInRange[K comparable, V any](m map[K]V, limit, skip int) (map[K]V, error) {
-	if skip < 0 {
-		return nil, errors.New("skip cannot be negative")
-	}
-	if limit < 0 {
-		return nil, errors.New("limit cannot be negative")
-	}
-	if skip >= len(m) {
-		return nil, errors.New("skip cannot be greater than or equal to the length of the map")
-	}
-
-	// Create a new map for the result
-	result := make(map[K]V)
-
-	// Iterate over the map and collect the desired key-value pairs
-	count := 0
-	for k, v := range m {
-		if count >= skip && count < skip+limit {
-			result[k] = v
-		}
-		if count >= skip+limit {
-			break
-		}
-		count++
-	}
-
-	return result, nil
-}
-
 func getHelmReleaseInRange(helmReleases []HelmRelease, limit, skip int) ([]HelmRelease, error) {
 	return getSliceInRange(helmReleases, limit, skip)
 }
 
 func getResourcesInRange(resources []Resource, limit, skip int) ([]Resource, error) {
 	return getSliceInRange(resources, limit, skip)
-}
-
-func getProfileStatusesInRange(profileStatuses map[string][]ClusterFeatureSummary, limit, skip int) (map[string][]ClusterFeatureSummary, error) {
-	return getMapInRange(profileStatuses, limit, skip)
 }

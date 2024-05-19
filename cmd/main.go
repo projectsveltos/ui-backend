@@ -327,7 +327,8 @@ func startClusterSummaryController(mgr manager.Manager) {
 
 func getClusterSummaryReconciler(mgr manager.Manager) *controller.ClusterSummaryReconciler {
 	return &controller.ClusterSummaryReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		ConcurrentReconciles: concurrentReconciles,
 	}
 }
