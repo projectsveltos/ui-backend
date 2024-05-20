@@ -173,6 +173,46 @@ var (
 		// Return JSON response
 		c.JSON(http.StatusOK, response)
 	}
+
+	getClusterStatus = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get deployed Kubernetes resources")
+
+		limit, skip := getLimitAndSkipFromQuery(c)
+		namespace, name, clusterType := getClusterFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
+
+		manager := GetManagerInstance()
+		clusterProfileStatuses := manager.GetClusterProfileStatusesByCluster(&namespace, &name, clusterType)
+		profiles := make(map[string][]ClusterFeatureSummary, len(clusterProfileStatuses))
+
+		for _, clusterProfileStatus := range clusterProfileStatuses {
+			if _, ok := profiles[*clusterProfileStatus.Name]; !ok {
+				profiles[*clusterProfileStatus.Name] = make([]ClusterFeatureSummary, 0)
+			}
+
+			for _, summary := range clusterProfileStatus.Summary {
+				// Add it only if the status is not Provisioned (includes removed as well)
+				for _, failingClusterSummaryType := range failingClusterSummaryTypes {
+					if summary.Status == failingClusterSummaryType {
+						profiles[*clusterProfileStatus.Name] = append(profiles[*clusterProfileStatus.Name], summary)
+						break
+					}
+				}
+			}
+		}
+
+		result, err := getProfileStatusesInRange(profiles, limit, skip)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"clusterName": name,
+			"profiles":    result,
+		})
+	}
 )
 
 func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
@@ -189,6 +229,8 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/helmcharts", getDeployedHelmCharts)
 	// Return resources deployed in a given managed cluster
 	r.GET("/resources", getDeployedResources)
+	// Return the specified cluster status
+	r.GET("/getClusterStatus", getClusterStatus)
 
 	errCh := make(chan error)
 

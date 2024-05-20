@@ -273,52 +273,31 @@ func addDeployedResourcesForFeature(profileName string,
 	}
 }
 
-func getHelmReleaseInRange(helmReleases []HelmRelease, limit, skip int) ([]HelmRelease, error) {
-	if len(helmReleases) == 0 {
-		return helmReleases, nil
-	}
-
+func getSliceInRange[T any](items []T, limit, skip int) ([]T, error) {
 	if skip < 0 {
 		return nil, errors.New("skip cannot be negative")
 	}
 	if limit < 0 {
 		return nil, errors.New("limit cannot be negative")
 	}
-	if skip >= len(helmReleases) {
+	if skip >= len(items) {
 		return nil, errors.New("skip cannot be greater than or equal to the length of the slice")
 	}
 
 	// Adjust limit based on slice length and skip
 	adjustedLimit := limit
-	if skip+limit > len(helmReleases) {
-		adjustedLimit = len(helmReleases) - skip
+	if skip+limit > len(items) {
+		adjustedLimit = len(items) - skip
 	}
 
 	// Use slicing to extract the desired sub-slice
-	return helmReleases[skip : skip+adjustedLimit], nil
+	return items[skip : skip+adjustedLimit], nil
+}
+
+func getHelmReleaseInRange(helmReleases []HelmRelease, limit, skip int) ([]HelmRelease, error) {
+	return getSliceInRange(helmReleases, limit, skip)
 }
 
 func getResourcesInRange(resources []Resource, limit, skip int) ([]Resource, error) {
-	if len(resources) == 0 {
-		return resources, nil
-	}
-
-	if skip < 0 {
-		return nil, errors.New("skip cannot be negative")
-	}
-	if limit < 0 {
-		return nil, errors.New("limit cannot be negative")
-	}
-	if skip >= len(resources) {
-		return nil, errors.New("skip cannot be greater than or equal to the length of the slice")
-	}
-
-	// Adjust limit based on slice length and skip
-	adjustedLimit := limit
-	if skip+limit > len(resources) {
-		adjustedLimit = len(resources) - skip
-	}
-
-	// Use slicing to extract the desired sub-slice
-	return resources[skip : skip+adjustedLimit], nil
+	return getSliceInRange(resources, limit, skip)
 }

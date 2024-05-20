@@ -34,6 +34,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/ui-backend/internal/server"
 )
@@ -52,9 +53,71 @@ func randomPort() string {
 	return fmt.Sprintf(":%d", randomNumber)
 }
 
+func createTestCAPICluster(namespace, name string) *clusterv1.Cluster {
+	return &clusterv1.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+			Labels: map[string]string{
+				randomString(): randomString(),
+				randomString(): randomString(),
+			},
+		},
+		Spec: clusterv1.ClusterSpec{
+			Topology: &clusterv1.Topology{
+				Version: k8sVersion,
+			},
+		},
+		Status: clusterv1.ClusterStatus{
+			ControlPlaneReady: true,
+		},
+	}
+}
+
+func createTestClusterSummary(
+	name, namespace, clusterNamespace, clusterName string,
+	featureSummaries []configv1alpha1.FeatureSummary,
+) *configv1alpha1.ClusterSummary {
+
+	clSum := &configv1alpha1.ClusterSummary{
+		TypeMeta: metav1.TypeMeta{
+			Kind: configv1alpha1.ClusterSummaryKind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				configv1alpha1.ClusterNameLabel: clusterName,
+				configv1alpha1.ClusterTypeLabel: randomString(),
+			},
+		},
+		Spec: configv1alpha1.ClusterSummarySpec{
+			ClusterNamespace:   clusterNamespace,
+			ClusterName:        clusterName,
+			ClusterType:        libsveltosv1alpha1.ClusterTypeCapi,
+			ClusterProfileSpec: configv1alpha1.Spec{},
+		},
+		Status: configv1alpha1.ClusterSummaryStatus{
+			FeatureSummaries: featureSummaries,
+		},
+	}
+
+	ownerRef := metav1.OwnerReference{
+		Name:       "properSummary",
+		Kind:       configv1alpha1.ClusterProfileKind,
+		APIVersion: configv1alpha1.GroupVersion.Group + "/randomv1",
+	}
+
+	clSum.OwnerReferences = append(clSum.OwnerReferences, ownerRef)
+
+	return clSum
+}
+
 var _ = Describe("Manager", func() {
 	var sveltosCluster *libsveltosv1alpha1.SveltosCluster
 	var cluster *clusterv1.Cluster
+	var properClusterSummary *configv1alpha1.ClusterSummary
+	var invalidClusterSummary *configv1alpha1.ClusterSummary
 	var c client.Client
 	var scheme *runtime.Scheme
 	var logger logr.Logger
@@ -81,27 +144,41 @@ var _ = Describe("Manager", func() {
 			},
 		}
 
-		cluster = &clusterv1.Cluster{
+		cluster = createTestCAPICluster(randomString(), randomString())
+
+		properClusterSummaryFailureMessage := "just an error message"
+		properClusterSummary = createTestClusterSummary(
+			"properSummary",
+			cluster.Namespace, // is in the same namespace of the cluster
+			cluster.Namespace,
+			cluster.Name,
+			[]configv1alpha1.FeatureSummary{
+				{
+					FeatureID:      "Helm",
+					Status:         configv1alpha1.FeatureStatusProvisioning,
+					FailureMessage: &properClusterSummaryFailureMessage,
+				},
+			},
+		)
+
+		invalidClusterSummary = &configv1alpha1.ClusterSummary{
+			TypeMeta: metav1.TypeMeta{
+				Kind: configv1alpha1.ClusterSummaryKind,
+			},
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: randomString(),
-				Name:      randomString(),
-				Labels: map[string]string{
-					randomString(): randomString(),
-					randomString(): randomString(),
-				},
+				Name: "summaryWithNoLabels",
 			},
-			Spec: clusterv1.ClusterSpec{
-				Topology: &clusterv1.Topology{
-					Version: k8sVersion,
-				},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace:   cluster.Namespace,
+				ClusterName:        cluster.Name,
+				ClusterType:        clusterv1.ClusterKind,
+				ClusterProfileSpec: configv1alpha1.Spec{},
 			},
-			Status: clusterv1.ClusterStatus{
-				ControlPlaneReady: true,
-			},
+			Status: configv1alpha1.ClusterSummaryStatus{},
 		}
 	})
 
-	It("AddSveltosCluster add SveltosCluster to list of managed clusters", func() {
+	It("AddSveltosCluster adds SveltosCluster to list of managed clusters", func() {
 		clusterRef := &corev1.ObjectReference{
 			Namespace:  sveltosCluster.Namespace,
 			Name:       sveltosCluster.Name,
@@ -129,7 +206,7 @@ var _ = Describe("Manager", func() {
 		Expect(reflect.DeepEqual(v, clusterInfo)).To(BeTrue())
 	})
 
-	It("RemoveSveltosCluster remove SveltosCluster from list of managed clusters", func() {
+	It("RemoveSveltosCluster removes SveltosCluster from list of managed clusters", func() {
 		clusterRef := &corev1.ObjectReference{
 			Namespace:  sveltosCluster.Namespace,
 			Name:       sveltosCluster.Name,
@@ -160,7 +237,7 @@ var _ = Describe("Manager", func() {
 		Expect(ok).To(BeFalse())
 	})
 
-	It("AddCAPICluster add ClusterAPI powered Cluster to list of managed clusters", func() {
+	It("AddCAPICluster adds ClusterAPI powered Cluster to list of managed clusters", func() {
 		clusterRef := &corev1.ObjectReference{
 			Namespace:  cluster.Namespace,
 			Name:       cluster.Name,
@@ -188,7 +265,7 @@ var _ = Describe("Manager", func() {
 		Expect(reflect.DeepEqual(v, clusterInfo)).To(BeTrue())
 	})
 
-	It("RemoveCAPICluster remove ClusterAPI powered Cluster from list of managed clusters", func() {
+	It("RemoveCAPICluster removes ClusterAPI powered Cluster from list of managed clusters", func() {
 		clusterRef := &corev1.ObjectReference{
 			Namespace:  cluster.Namespace,
 			Name:       cluster.Name,
@@ -217,5 +294,104 @@ var _ = Describe("Manager", func() {
 		clusters = manager.GetManagedCAPIClusters()
 		_, ok = clusters[*clusterRef]
 		Expect(ok).To(BeFalse())
+	})
+
+	It("AddClusterProfileStatus adds ClusterProfileStatus of a given cluster to a list of cluster profile statuses", func() {
+		clusterSummaryRef := &corev1.ObjectReference{
+			Namespace:  properClusterSummary.Namespace,
+			Name:       properClusterSummary.Name,
+			Kind:       configv1alpha1.ClusterSummaryKind,
+			APIVersion: configv1alpha1.GroupVersion.String(),
+		}
+
+		properClusterProfileStatus := server.ClusterProfileStatus{
+			Name:        &properClusterSummary.Name,
+			Namespace:   &properClusterSummary.Namespace,
+			ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
+			ClusterName: &properClusterSummary.Spec.ClusterName,
+			Summary:     server.MapToClusterFeatureSummaries(&properClusterSummary.Status.FeatureSummaries),
+		}
+
+		noLabelsClusterSummaryRef := &corev1.ObjectReference{
+			Namespace:  invalidClusterSummary.Namespace,
+			Name:       invalidClusterSummary.Name,
+			Kind:       configv1alpha1.ClusterSummaryKind,
+			APIVersion: configv1alpha1.GroupVersion.String(),
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		// test it has been added
+		manager.AddClusterProfileStatus(properClusterSummary)
+		clusterProfileStatuses := manager.GetClusterProfileStatuses()
+		v, ok := clusterProfileStatuses[*clusterSummaryRef]
+		Expect(ok).To(BeTrue())
+		Expect(reflect.DeepEqual(v, properClusterProfileStatus)).To(BeTrue())
+
+		// if I add a cluster summary that has not the proper labels, ignore it (not in the list)
+		manager.AddClusterProfileStatus(invalidClusterSummary)
+		clusterProfileStatuses = manager.GetClusterProfileStatuses()
+		_, ok = clusterProfileStatuses[*noLabelsClusterSummaryRef]
+		Expect(ok).To(BeFalse())
+	})
+
+	It("RemoveClusterProfileStatus removes ClusterProfileStatus object from the list of cluster profile statuses", func() {
+		clusterSummaryRef := &corev1.ObjectReference{
+			Namespace:  properClusterSummary.Namespace,
+			Name:       properClusterSummary.Name,
+			Kind:       configv1alpha1.ClusterSummaryKind,
+			APIVersion: configv1alpha1.GroupVersion.String(),
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		// test it has been added
+		manager.AddClusterProfileStatus(properClusterSummary)
+		manager.RemoveClusterProfileStatus(properClusterSummary.Namespace, properClusterSummary.Name)
+		clusterProfileStatuses := manager.GetClusterProfileStatuses()
+		_, ok := clusterProfileStatuses[*clusterSummaryRef]
+		Expect(ok).To(BeFalse())
+	})
+
+	It("GetClusterProfileStatusesByCluster returns a list of ClusterProfileStatus belonging to a cluster given in input", func() {
+
+		additionalClusterSummary := createTestClusterSummary(
+			"additionalSummary",
+			randomString(),
+			randomString(),
+			randomString(),
+			[]configv1alpha1.FeatureSummary{},
+		)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		// make sure there's already an existing cluster in the manager
+		Expect(len(manager.GetManagedCAPIClusters()) == 1).To(BeTrue())
+		manager.AddClusterProfileStatus(properClusterSummary)
+		manager.AddClusterProfileStatus(additionalClusterSummary)
+
+		clusterProfileStatuses := manager.GetClusterProfileStatusesByCluster(
+			&cluster.Namespace,
+			&cluster.Name,
+			libsveltosv1alpha1.ClusterTypeCapi,
+		)
+
+		Expect(len(clusterProfileStatuses) == 1).To(BeTrue())
+		// the remaining cluster profile must be the one specified by the proper cluster summary
+		// as it is the only one that belongs to the cluster with Namespace cluster.Namespace and
+		// Name cluster.Name
+		Expect(*clusterProfileStatuses[0].Name == properClusterSummary.Name).To(BeTrue())
 	})
 })

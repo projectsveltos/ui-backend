@@ -143,6 +143,7 @@ func main() {
 	setupChecks(mgr)
 
 	go startClusterController(ctx, mgr, setupLog)
+	go startClusterSummaryController(mgr)
 
 	server.InitializeManagerInstance(ctx, mgr.GetClient(), scheme,
 		httpPort, ctrl.Log.WithName("gin"))
@@ -309,6 +310,23 @@ func startSveltosClusterController(mgr manager.Manager) {
 
 func getSveltosClusterReconciler(mgr manager.Manager) *controller.SveltosClusterReconciler {
 	return &controller.SveltosClusterReconciler{
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		ConcurrentReconciles: concurrentReconciles,
+	}
+}
+
+func startClusterSummaryController(mgr manager.Manager) {
+	clusterSummaryReconciler := getClusterSummaryReconciler(mgr)
+	err := clusterSummaryReconciler.SetupWithManager(mgr)
+	if err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ClusterSummary")
+		os.Exit(1)
+	}
+}
+
+func getClusterSummaryReconciler(mgr manager.Manager) *controller.ClusterSummaryReconciler {
+	return &controller.ClusterSummaryReconciler{
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		ConcurrentReconciles: concurrentReconciles,

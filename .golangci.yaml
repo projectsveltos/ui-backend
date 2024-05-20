@@ -97,7 +97,6 @@ linters:
     - containedctx
     - bodyclose
     - dogsled
-    - dupl
     - durationcheck
     - errcheck
     - errname
