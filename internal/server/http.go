@@ -122,7 +122,7 @@ var (
 			_ = c.AbortWithError(http.StatusBadRequest, err)
 		}
 		sort.Slice(helmCharts, func(i, j int) bool {
-			return helmCharts[i].LastAppliedTime.Before(helmCharts[j].LastAppliedTime)
+			return sortHelmCharts(helmCharts, i, j)
 		})
 
 		result, err := getHelmReleaseInRange(helmCharts, limit, skip)
@@ -156,7 +156,7 @@ var (
 			_ = c.AbortWithError(http.StatusBadRequest, err)
 		}
 		sort.Slice(resources, func(i, j int) bool {
-			return resources[i].LastAppliedTime.Before(resources[j].LastAppliedTime)
+			return sortResources(resources, i, j)
 		})
 
 		result, err := getResourcesInRange(resources, limit, skip)

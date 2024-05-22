@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
@@ -300,4 +301,42 @@ func getHelmReleaseInRange(helmReleases []HelmRelease, limit, skip int) ([]HelmR
 
 func getResourcesInRange(resources []Resource, limit, skip int) ([]Resource, error) {
 	return getSliceInRange(resources, limit, skip)
+}
+
+// sortResources sorts resources by last applied time. In case time is same,
+// resources are sorted by GVK
+func sortResources(resources []Resource, i, j int) bool {
+	if resources[i].LastAppliedTime.Equal(resources[j].LastAppliedTime) {
+		// If deployment time is same, sort by GVK
+		gvk1 := schema.GroupVersionKind{
+			Group:   resources[i].Group,
+			Kind:    resources[i].Kind,
+			Version: resources[i].Version,
+		}
+
+		gvk2 := schema.GroupVersionKind{
+			Group:   resources[j].Group,
+			Kind:    resources[j].Kind,
+			Version: resources[j].Version,
+		}
+
+		return gvk1.String() < gvk2.String()
+	}
+
+	return resources[i].LastAppliedTime.Before(resources[j].LastAppliedTime)
+}
+
+// sortHelmCharts sorts helm charts by last applied time. In case time is same,
+// resources are sorted by namespace and finally release name
+func sortHelmCharts(helmCharts []HelmRelease, i, j int) bool {
+	if helmCharts[i].LastAppliedTime.Equal(helmCharts[j].LastAppliedTime) {
+		// If deployment time is same, sort by release namespace and then release name
+		if helmCharts[i].Namespace == helmCharts[j].Namespace {
+			return helmCharts[i].ReleaseName < helmCharts[j].ReleaseName
+		}
+
+		return helmCharts[i].Namespace < helmCharts[j].Namespace
+	}
+
+	return helmCharts[i].LastAppliedTime.Before(helmCharts[j].LastAppliedTime)
 }
