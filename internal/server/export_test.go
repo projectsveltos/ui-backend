@@ -20,6 +20,9 @@ var (
 	GetClustersInRange    = getClustersInRange
 	GetHelmReleaseInRange = getHelmReleaseInRange
 	GetResourcesInRange   = getResourcesInRange
+
+	SortResources  = sortResources
+	SortHelmCharts = sortHelmCharts
 )
 
 var (

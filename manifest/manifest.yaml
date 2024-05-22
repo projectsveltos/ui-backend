@@ -66,6 +66,22 @@ rules:
   - list
   - watch
 - apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clustersummaries
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clustersummaries/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - lib.projectsveltos.io
   resources:
   - debuggingconfigurations
