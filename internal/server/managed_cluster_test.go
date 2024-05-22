@@ -95,8 +95,9 @@ var _ = Describe("ManageClusters", func() {
 
 		limit = 3
 		skip = 11
-		_, err = server.GetClustersInRange(managedClusters, limit, skip)
-		Expect(err).ToNot(BeNil())
+		result, err = server.GetClustersInRange(managedClusters, limit, skip)
+		Expect(err).To(BeNil())
+		Expect(len(result)).To(BeZero())
 	})
 
 	It("getClusterFiltersFromQuery returns cluster filters", func() {

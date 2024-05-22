@@ -282,7 +282,7 @@ func getSliceInRange[T any](items []T, limit, skip int) ([]T, error) {
 		return nil, errors.New("limit cannot be negative")
 	}
 	if skip >= len(items) {
-		return nil, errors.New("skip cannot be greater than or equal to the length of the slice")
+		return nil, nil
 	}
 
 	// Adjust limit based on slice length and skip

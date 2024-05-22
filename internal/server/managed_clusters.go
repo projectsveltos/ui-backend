@@ -58,7 +58,7 @@ func getClustersInRange(clusters ManagedClusters, limit, skip int) (ManagedClust
 		return nil, errors.New("limit cannot be negative")
 	}
 	if skip >= len(clusters) {
-		return nil, errors.New("skip cannot be greater than or equal to the length of the slice")
+		return nil, nil
 	}
 
 	// Adjust limit based on slice length and skip

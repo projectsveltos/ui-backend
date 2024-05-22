@@ -71,8 +71,9 @@ var _ = Describe("Deployed Addons and Applications", func() {
 
 		limit = 3
 		skip = 11
-		_, err = server.GetHelmReleaseInRange(helmReleases, limit, skip)
-		Expect(err).ToNot(BeNil())
+		result, err = server.GetHelmReleaseInRange(helmReleases, limit, skip)
+		Expect(err).To(BeNil())
+		Expect(len(result)).To(BeZero())
 	})
 
 	It("getResourcesInRange returns the right set of deployed Kubernetes resources", func() {
@@ -116,8 +117,9 @@ var _ = Describe("Deployed Addons and Applications", func() {
 
 		limit = 3
 		skip = 11
-		_, err = server.GetResourcesInRange(resources, limit, skip)
-		Expect(err).ToNot(BeNil())
+		result, err = server.GetResourcesInRange(resources, limit, skip)
+		Expect(err).To(BeNil())
+		Expect(len(result)).To(BeZero())
 	})
 
 	It("sortResources sorts resources by applied time first and GVK then", func() {
