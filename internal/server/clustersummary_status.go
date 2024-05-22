@@ -15,7 +15,7 @@ func getMapInRange[K comparable, V any](m map[K]V, limit, skip int) (map[K]V, er
 		return nil, errors.New("limit cannot be negative")
 	}
 	if skip >= len(m) {
-		return nil, errors.New("skip cannot be greater than or equal to the length of the map")
+		return nil, nil
 	}
 
 	// Extract keys and sort them
