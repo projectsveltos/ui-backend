@@ -1,44 +1,64 @@
 package server
 
 import (
-	"errors"
-	"fmt"
-	"sort"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 )
 
-// getMapInRange extracts a subset of key-value pairs from the given map, skipping the first 'skip' pairs and then taking up to 'limit' pairs.
-func getMapInRange[K comparable, V any](m map[K]V, limit, skip int) (map[K]V, error) {
-	if skip < 0 {
-		return nil, errors.New("skip cannot be negative")
-	}
-	if limit < 0 {
-		return nil, errors.New("limit cannot be negative")
-	}
-	if skip >= len(m) {
-		return nil, nil
-	}
-
-	// Extract keys and sort them
-	keys := make([]K, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		return fmt.Sprintf("%v", keys[i]) < fmt.Sprintf("%v", keys[j])
-	})
-
-	// Create a new map for the result
-	result := make(map[K]V)
-
-	// Iterate over the sorted keys and collect the desired key-value pairs
-	for i := skip; i < skip+limit && i < len(keys); i++ {
-		k := keys[i]
-		result[k] = m[k]
-	}
-
-	return result, nil
+type ProfileStatusResult struct {
+	ProfileName string `json:"profileName"`
+	ProfileType string `json:"profileType"`
+	ClusterFeatureSummary
 }
 
-func getProfileStatusesInRange(profileStatuses map[string][]ClusterFeatureSummary, limit, skip int) (map[string][]ClusterFeatureSummary, error) {
-	return getMapInRange(profileStatuses, limit, skip)
+func getFlattenedProfileStatusesInRange(flattenedProfileStatuses []ProfileStatusResult, limit, skip int) ([]ProfileStatusResult, error) {
+	return getSliceInRange(flattenedProfileStatuses, limit, skip)
+}
+
+func flattenProfileStatuses(profileStatuses []ClusterProfileStatus, failedOnly bool) []ProfileStatusResult {
+	result := make([]ProfileStatusResult, 0)
+
+	for i := range profileStatuses {
+		result = append(result, flattenProfileStatus(&profileStatuses[i], failedOnly)...)
+	}
+
+	return result
+}
+
+func flattenProfileStatus(profileStatus *ClusterProfileStatus, failedOnly bool) []ProfileStatusResult {
+	result := make([]ProfileStatusResult, 0)
+	for i := range profileStatus.Summary {
+		if !failedOnly || !isCompleted(profileStatus.Summary[i]) {
+			result = append(result,
+				ProfileStatusResult{
+					ProfileName:           profileStatus.ProfileName,
+					ProfileType:           profileStatus.ProfileType,
+					ClusterFeatureSummary: profileStatus.Summary[i],
+				})
+		}
+	}
+
+	return result
+}
+
+func isCompleted(cfs ClusterFeatureSummary) bool {
+	if cfs.Status != configv1alpha1.FeatureStatusProvisioned &&
+		cfs.Status != configv1alpha1.FeatureStatusRemoved {
+
+		return false
+	}
+
+	return true
+}
+
+// sortClusterProfileStatus sort by ProfileType first, ProfileName later and finally by FeatureID
+func sortClusterProfileStatus(flattenedProfileStatuses []ProfileStatusResult, i, j int) bool {
+	if flattenedProfileStatuses[i].ProfileType == flattenedProfileStatuses[j].ProfileType {
+		if flattenedProfileStatuses[i].ProfileName == flattenedProfileStatuses[j].ProfileName {
+			return flattenedProfileStatuses[i].FeatureID < flattenedProfileStatuses[j].FeatureID
+		}
+
+		return flattenedProfileStatuses[i].ProfileName < flattenedProfileStatuses[j].ProfileName
+	}
+
+	return flattenedProfileStatuses[i].ProfileType < flattenedProfileStatuses[j].ProfileType
 }
