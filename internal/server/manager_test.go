@@ -305,10 +305,11 @@ var _ = Describe("Manager", func() {
 		}
 
 		properClusterProfileStatus := server.ClusterProfileStatus{
-			Name:        &properClusterSummary.Name,
-			Namespace:   &properClusterSummary.Namespace,
+			ProfileName: properClusterSummary.Name,
+			ProfileType: configv1alpha1.ClusterProfileKind,
+			Namespace:   properClusterSummary.Namespace,
 			ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
-			ClusterName: &properClusterSummary.Spec.ClusterName,
+			ClusterName: properClusterSummary.Spec.ClusterName,
 			Summary:     server.MapToClusterFeatureSummaries(&properClusterSummary.Status.FeatureSummaries),
 		}
 
@@ -392,6 +393,6 @@ var _ = Describe("Manager", func() {
 		// the remaining cluster profile must be the one specified by the proper cluster summary
 		// as it is the only one that belongs to the cluster with Namespace cluster.Namespace and
 		// Name cluster.Name
-		Expect(*clusterProfileStatuses[0].Name == properClusterSummary.Name).To(BeTrue())
+		Expect(clusterProfileStatuses[0].ProfileName == properClusterSummary.Name).To(BeTrue())
 	})
 })

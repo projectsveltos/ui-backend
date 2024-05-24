@@ -175,42 +175,32 @@ var (
 	}
 
 	getClusterStatus = func(c *gin.Context) {
-		ginLogger.V(logs.LogDebug).Info("get deployed Kubernetes resources")
+		ginLogger.V(logs.LogDebug).Info("get list of profiles (and their status) matching a cluster")
 
+		failedOnly := getFailedOnlyFromQuery(c)
 		limit, skip := getLimitAndSkipFromQuery(c)
 		namespace, name, clusterType := getClusterFromQuery(c)
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("failed %t", failedOnly))
 
 		manager := GetManagerInstance()
 		clusterProfileStatuses := manager.GetClusterProfileStatusesByCluster(&namespace, &name, clusterType)
-		profiles := make(map[string][]ClusterFeatureSummary, len(clusterProfileStatuses))
 
-		for _, clusterProfileStatus := range clusterProfileStatuses {
-			if _, ok := profiles[*clusterProfileStatus.Name]; !ok {
-				profiles[*clusterProfileStatus.Name] = make([]ClusterFeatureSummary, 0)
-			}
+		flattenedProfileStatuses := flattenProfileStatuses(clusterProfileStatuses, failedOnly)
+		sort.Slice(flattenedProfileStatuses, func(i, j int) bool {
+			return sortClusterProfileStatus(flattenedProfileStatuses, i, j)
+		})
 
-			for _, summary := range clusterProfileStatus.Summary {
-				// Add it only if the status is not Provisioned (includes removed as well)
-				for _, failingClusterSummaryType := range failingClusterSummaryTypes {
-					if summary.Status == failingClusterSummaryType {
-						profiles[*clusterProfileStatus.Name] = append(profiles[*clusterProfileStatus.Name], summary)
-						break
-					}
-				}
-			}
-		}
-
-		result, err := getProfileStatusesInRange(profiles, limit, skip)
+		result, err := getFlattenedProfileStatusesInRange(flattenedProfileStatuses, limit, skip)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"clusterName": name,
-			"profiles":    result,
+			"totalResources": len(flattenedProfileStatuses),
+			"profiles":       result,
 		})
 	}
 )
@@ -314,6 +304,26 @@ func getLimitAndSkipFromQuery(c *gin.Context) (limit, skip int) {
 	}
 
 	return
+}
+
+func getFailedOnlyFromQuery(c *gin.Context) bool {
+	// Define default values for limit and skip
+	failedOnly := false
+
+	// Get the values from query parameters
+	queryFailed := c.Query("failed")
+
+	// Parse the query parameters to int (handle errors)
+	var err error
+	if queryFailed != "" {
+		failedOnly, err = strconv.ParseBool(queryFailed)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid failed parameter"})
+			return failedOnly
+		}
+	}
+
+	return failedOnly
 }
 
 func getClusterFromQuery(c *gin.Context) (namespace, name string, clusterType libsveltosv1alpha1.ClusterType) {

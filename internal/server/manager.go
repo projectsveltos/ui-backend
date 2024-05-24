@@ -39,10 +39,11 @@ type ClusterInfo struct {
 }
 
 type ClusterProfileStatus struct {
-	Name        *string                        `json:"name"`
-	Namespace   *string                        `json:"namespace"`
+	ProfileName string                         `json:"profileName"`
+	ProfileType string                         `json:"profileType"`
+	Namespace   string                         `json:"namespace"`
 	ClusterType libsveltosv1alpha1.ClusterType `json:"clusterType"`
-	ClusterName *string                        `json:"clusterName"`
+	ClusterName string                         `json:"clusterName"`
 	Summary     []ClusterFeatureSummary        `json:"summary"`
 }
 
@@ -64,13 +65,8 @@ type instance struct {
 }
 
 var (
-	managerInstance            *instance
-	lock                       = &sync.RWMutex{}
-	failingClusterSummaryTypes = []configv1alpha1.FeatureStatus{
-		configv1alpha1.FeatureStatusFailed,
-		configv1alpha1.FeatureStatusFailedNonRetriable,
-		configv1alpha1.FeatureStatusProvisioning,
-	}
+	managerInstance *instance
+	lock            = &sync.RWMutex{}
 )
 
 // InitializeManagerInstance initializes manager instance
@@ -131,10 +127,10 @@ func (m *instance) GetClusterProfileStatusesByCluster(
 	clusterProfileStatuses := make([]ClusterProfileStatus, 0)
 	for _, clusterProfileStatus := range m.clusterSummaryReport {
 		// since we're sure it is a proper cluster summary => we're sure it has this label
-		if *clusterProfileStatus.Namespace == *clusterNamespace && *clusterProfileStatus.ClusterName == *clusterName {
-			if clusterProfileStatus.ClusterType == clusterType {
-				clusterProfileStatuses = append(clusterProfileStatuses, clusterProfileStatus)
-			}
+		if clusterProfileStatus.Namespace == *clusterNamespace && clusterProfileStatus.ClusterName == *clusterName &&
+			clusterProfileStatus.ClusterType == clusterType {
+
+			clusterProfileStatuses = append(clusterProfileStatuses, clusterProfileStatus)
 		}
 	}
 
@@ -219,10 +215,11 @@ func (m *instance) AddClusterProfileStatus(summary *configv1alpha1.ClusterSummar
 	clusterFeatureSummaries := MapToClusterFeatureSummaries(&summary.Status.FeatureSummaries)
 
 	clusterProfileStatus := ClusterProfileStatus{
-		Name:        &profileOwnerRef.Name,
-		Namespace:   &summary.Namespace,
+		ProfileName: profileOwnerRef.Name,
+		ProfileType: profileOwnerRef.Kind,
+		Namespace:   summary.Namespace,
 		ClusterType: summary.Spec.ClusterType,
-		ClusterName: &summary.Spec.ClusterName,
+		ClusterName: summary.Spec.ClusterName,
 		Summary:     clusterFeatureSummaries,
 	}
 
