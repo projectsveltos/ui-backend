@@ -33,8 +33,26 @@ http://localhost:9000/capiclusters?limit=1&skip=0&namespace=default&labels=env:f
 
 returns 
 
-```
-{"totalClusters":1,"managedClusters":[{"namespace":"default","name":"clusterapi-workload","clusterInfo":{"labels":{"cluster.x-k8s.io/cluster-name":"clusterapi-workload","env":"fv","topology.cluster.x-k8s.io/owned":""},"version":"v1.27.0","ready":true,"failureMessage":null}}]}
+```json
+{
+  "totalClusters": 1,
+  "managedClusters": [
+    {
+      "namespace": "default",
+      "name": "clusterapi-workload",
+      "clusterInfo": {
+        "labels": {
+          "cluster.x-k8s.io/cluster-name": "clusterapi-workload",
+          "env": "fv",
+          "topology.cluster.x-k8s.io/owned": ""
+        },
+        "version": "v1.27.0",
+        "ready": true,
+        "failureMessage": null
+      }
+    }
+  ]
+}
 ```
 
 This API supports pagination. Use:
@@ -64,8 +82,22 @@ http://localhost:9000/sveltosclusters?limit=1&skip=0&namespace=mgmt&name=mgmt
 
 returns 
 
-```
-{"totalClusters":1,"managedClusters":[{"namespace":"mgmt","name":"mgmt","clusterInfo":{"labels":null,"version":"v1.29.0","ready":true,"failureMessage":null}}]}
+```json
+{
+  "totalClusters": 1,
+  "managedClusters": [
+    {
+      "namespace": "mgmt",
+      "name": "mgmt",
+      "clusterInfo": {
+        "labels": null,
+        "version": "v1.29.0",
+        "ready": true,
+        "failureMessage": null
+      }
+    }
+  ]
+}
 ```
 
 This API supports pagination. Use:
@@ -94,8 +126,48 @@ http://localhost:9000/helmcharts?namespace=default&name=clusterapi-workload&type
 
 returns 
 
-```
-{"totalHelmReleases":4,"helmReleases":[{"repoURL":"https://prometheus-community.github.io/helm-charts","releaseName":"prometheus","namespace":"prometheus","chartVersion":"23.4.0","icon":"https://raw.githubusercontent.com/prometheus/prometheus.github.io/master/assets/prometheus_logo-cb55bb5c346.png","lastAppliedTime":"2024-04-28T13:49:29Z","profileName":"ClusterProfile/prometheus-grafana"},{"repoURL":"https://grafana.github.io/helm-charts","releaseName":"grafana","namespace":"grafana","chartVersion":"6.58.9","icon":"https://raw.githubusercontent.com/grafana/grafana/master/public/img/logo_transparent_400x.png","lastAppliedTime":"2024-04-28T13:49:38Z","profileName":"ClusterProfile/prometheus-grafana"},{"repoURL":"https://kyverno.github.io/kyverno/","releaseName":"kyverno-latest","namespace":"kyverno","chartVersion":"3.1.4","icon":"https://github.com/kyverno/kyverno/raw/main/img/logo.png","lastAppliedTime":"2024-04-28T13:49:32Z","profileName":"ClusterProfile/deploy-kyverno"},{"repoURL":"https://helm.nginx.com/stable/","releaseName":"nginx-latest","namespace":"nginx","chartVersion":"1.1.3","icon":"https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/v3.4.3/charts/nginx-ingress/chart-icon.png","lastAppliedTime":"2024-04-28T13:49:36Z","profileName":"ClusterProfile/nginx"}]}
+```json
+{
+  "totalHelmReleases": 4,
+  "helmReleases": [
+    {
+      "repoURL": "https://prometheus-community.github.io/helm-charts",
+      "releaseName": "prometheus",
+      "namespace": "prometheus",
+      "chartVersion": "23.4.0",
+      "icon": "https://raw.githubusercontent.com/prometheus/prometheus.github.io/master/assets/prometheus_logo-cb55bb5c346.png",
+      "lastAppliedTime": "2024-04-28T13:49:29Z",
+      "profileName": "ClusterProfile/prometheus-grafana"
+    },
+    {
+      "repoURL": "https://grafana.github.io/helm-charts",
+      "releaseName": "grafana",
+      "namespace": "grafana",
+      "chartVersion": "6.58.9",
+      "icon": "https://raw.githubusercontent.com/grafana/grafana/master/public/img/logo_transparent_400x.png",
+      "lastAppliedTime": "2024-04-28T13:49:38Z",
+      "profileName": "ClusterProfile/prometheus-grafana"
+    },
+    {
+      "repoURL": "https://kyverno.github.io/kyverno/",
+      "releaseName": "kyverno-latest",
+      "namespace": "kyverno",
+      "chartVersion": "3.1.4",
+      "icon": "https://github.com/kyverno/kyverno/raw/main/img/logo.png",
+      "lastAppliedTime": "2024-04-28T13:49:32Z",
+      "profileName": "ClusterProfile/deploy-kyverno"
+    },
+    {
+      "repoURL": "https://helm.nginx.com/stable/",
+      "releaseName": "nginx-latest",
+      "namespace": "nginx",
+      "chartVersion": "1.1.3",
+      "icon": "https://raw.githubusercontent.com/nginxinc/kubernetes-ingress/v3.4.3/charts/nginx-ingress/chart-icon.png",
+      "lastAppliedTime": "2024-04-28T13:49:36Z",
+      "profileName": "ClusterProfile/nginx"
+    }
+  ]
+}
 ```
 ### Get Kubernetes Resources deployed in a cluster
 
@@ -117,8 +189,75 @@ http://localhost:9000/resources?namespace=default&name=clusterapi-workload&type=
 
 returns
 
+```json
+{
+  "totalResources": 2,
+  "resources": [
+    {
+      "name": "nginx",
+      "group": "",
+      "kind": "Namespace",
+      "version": "v1",
+      "lastAppliedTime": "2024-04-28T13:52:26Z",
+      "profileNames": [
+        "ClusterProfile/deploy-resources"
+      ]
+    },
+    {
+      "name": "",
+      "group": "",
+      "kind": "",
+      "version": "",
+      "profileNames": null
+    }
+  ]
+}
 ```
-{"totalResources":2,"resources":[{"name":"nginx","group":"","kind":"Namespace","version":"v1","lastAppliedTime":"2024-04-28T13:52:26Z","profileNames":["ClusterProfile/deploy-resources"]},{"name":"","group":"","kind":"","version":"","profileNames":null}]}
+
+### Get Cluster Status 
+
+```/getClusterStatus?namespace=<namespace>&name=<cluster-name>&type=<cluster-type>```
+
+where cluster type can either be __capi__ for ClusterAPI powered clusters or __sveltos__ for SveltosClusters
+
+This API supports pagination. Use:
+
+. ```limit=<int>``` to specify the number of Kubernetes resources the API will return
+
+. ```skip=<int>``` to specify from which Kubernetes resources to start (Kubernetes resources are ordered by lastAppliedTime)
+
+For instance:
+
+```
+http://localhost:9000/resources?namespace=default&name=clusterapi-workload&type=capi
+```
+
+returns 
+
+```json
+{
+  "profiles": [
+    {
+      "profileName": "deploy-kyverno",
+      "profileType": "ClusterProfile",
+      "featureID": "Helm",
+      "status": "Provisioned"
+    },
+    {
+      "profileName": "deploy-resources",
+      "profileType": "ClusterProfile",
+      "featureID": "Resources",
+      "status": "Provisioned"
+    },
+    {
+      "profileName": "nginx",
+      "profileType": "ClusterProfile",
+      "featureID": "Helm",
+      "status": "Provisioned"
+    }
+  ],
+  "totalResources": 3
+}
 ```
 
 ## Contributing 
