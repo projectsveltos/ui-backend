@@ -34,8 +34,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/ui-backend/internal/server"
 )
 
@@ -76,36 +76,36 @@ func createTestCAPICluster(namespace, name string) *clusterv1.Cluster {
 
 func createTestClusterSummary(
 	name, namespace, clusterNamespace, clusterName string,
-	featureSummaries []configv1alpha1.FeatureSummary,
-) *configv1alpha1.ClusterSummary {
+	featureSummaries []configv1beta1.FeatureSummary,
+) *configv1beta1.ClusterSummary {
 
-	clSum := &configv1alpha1.ClusterSummary{
+	clSum := &configv1beta1.ClusterSummary{
 		TypeMeta: metav1.TypeMeta{
-			Kind: configv1alpha1.ClusterSummaryKind,
+			Kind: configv1beta1.ClusterSummaryKind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 			Labels: map[string]string{
-				configv1alpha1.ClusterNameLabel: clusterName,
-				configv1alpha1.ClusterTypeLabel: randomString(),
+				configv1beta1.ClusterNameLabel: clusterName,
+				configv1beta1.ClusterTypeLabel: randomString(),
 			},
 		},
-		Spec: configv1alpha1.ClusterSummarySpec{
+		Spec: configv1beta1.ClusterSummarySpec{
 			ClusterNamespace:   clusterNamespace,
 			ClusterName:        clusterName,
-			ClusterType:        libsveltosv1alpha1.ClusterTypeCapi,
-			ClusterProfileSpec: configv1alpha1.Spec{},
+			ClusterType:        libsveltosv1beta1.ClusterTypeCapi,
+			ClusterProfileSpec: configv1beta1.Spec{},
 		},
-		Status: configv1alpha1.ClusterSummaryStatus{
+		Status: configv1beta1.ClusterSummaryStatus{
 			FeatureSummaries: featureSummaries,
 		},
 	}
 
 	ownerRef := metav1.OwnerReference{
 		Name:       "properSummary",
-		Kind:       configv1alpha1.ClusterProfileKind,
-		APIVersion: configv1alpha1.GroupVersion.Group + "/randomv1",
+		Kind:       configv1beta1.ClusterProfileKind,
+		APIVersion: configv1beta1.GroupVersion.Group + "/randomv1",
 	}
 
 	clSum.OwnerReferences = append(clSum.OwnerReferences, ownerRef)
@@ -114,10 +114,10 @@ func createTestClusterSummary(
 }
 
 var _ = Describe("Manager", func() {
-	var sveltosCluster *libsveltosv1alpha1.SveltosCluster
+	var sveltosCluster *libsveltosv1beta1.SveltosCluster
 	var cluster *clusterv1.Cluster
-	var properClusterSummary *configv1alpha1.ClusterSummary
-	var invalidClusterSummary *configv1alpha1.ClusterSummary
+	var properClusterSummary *configv1beta1.ClusterSummary
+	var invalidClusterSummary *configv1beta1.ClusterSummary
 	var c client.Client
 	var scheme *runtime.Scheme
 	var logger logr.Logger
@@ -129,7 +129,7 @@ var _ = Describe("Manager", func() {
 
 		logger = textlogger.NewLogger(textlogger.NewConfig())
 
-		sveltosCluster = &libsveltosv1alpha1.SveltosCluster{
+		sveltosCluster = &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: randomString(),
 				Name:      randomString(),
@@ -138,7 +138,7 @@ var _ = Describe("Manager", func() {
 					randomString(): randomString(),
 				},
 			},
-			Status: libsveltosv1alpha1.SveltosClusterStatus{
+			Status: libsveltosv1beta1.SveltosClusterStatus{
 				Ready:   true,
 				Version: k8sVersion,
 			},
@@ -152,29 +152,29 @@ var _ = Describe("Manager", func() {
 			cluster.Namespace, // is in the same namespace of the cluster
 			cluster.Namespace,
 			cluster.Name,
-			[]configv1alpha1.FeatureSummary{
+			[]configv1beta1.FeatureSummary{
 				{
 					FeatureID:      "Helm",
-					Status:         configv1alpha1.FeatureStatusProvisioning,
+					Status:         configv1beta1.FeatureStatusProvisioning,
 					FailureMessage: &properClusterSummaryFailureMessage,
 				},
 			},
 		)
 
-		invalidClusterSummary = &configv1alpha1.ClusterSummary{
+		invalidClusterSummary = &configv1beta1.ClusterSummary{
 			TypeMeta: metav1.TypeMeta{
-				Kind: configv1alpha1.ClusterSummaryKind,
+				Kind: configv1beta1.ClusterSummaryKind,
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "summaryWithNoLabels",
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace:   cluster.Namespace,
 				ClusterName:        cluster.Name,
 				ClusterType:        clusterv1.ClusterKind,
-				ClusterProfileSpec: configv1alpha1.Spec{},
+				ClusterProfileSpec: configv1beta1.Spec{},
 			},
-			Status: configv1alpha1.ClusterSummaryStatus{},
+			Status: configv1beta1.ClusterSummaryStatus{},
 		}
 	})
 
@@ -182,8 +182,8 @@ var _ = Describe("Manager", func() {
 		clusterRef := &corev1.ObjectReference{
 			Namespace:  sveltosCluster.Namespace,
 			Name:       sveltosCluster.Name,
-			Kind:       libsveltosv1alpha1.SveltosClusterKind,
-			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
 		}
 
 		clusterInfo := server.ClusterInfo{
@@ -210,8 +210,8 @@ var _ = Describe("Manager", func() {
 		clusterRef := &corev1.ObjectReference{
 			Namespace:  sveltosCluster.Namespace,
 			Name:       sveltosCluster.Name,
-			Kind:       libsveltosv1alpha1.SveltosClusterKind,
-			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -300,15 +300,15 @@ var _ = Describe("Manager", func() {
 		clusterSummaryRef := &corev1.ObjectReference{
 			Namespace:  properClusterSummary.Namespace,
 			Name:       properClusterSummary.Name,
-			Kind:       configv1alpha1.ClusterSummaryKind,
-			APIVersion: configv1alpha1.GroupVersion.String(),
+			Kind:       configv1beta1.ClusterSummaryKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
 		}
 
 		properClusterProfileStatus := server.ClusterProfileStatus{
 			ProfileName: properClusterSummary.Name,
-			ProfileType: configv1alpha1.ClusterProfileKind,
+			ProfileType: configv1beta1.ClusterProfileKind,
 			Namespace:   properClusterSummary.Namespace,
-			ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
+			ClusterType: libsveltosv1beta1.ClusterTypeCapi,
 			ClusterName: properClusterSummary.Spec.ClusterName,
 			Summary:     server.MapToClusterFeatureSummaries(&properClusterSummary.Status.FeatureSummaries),
 		}
@@ -316,8 +316,8 @@ var _ = Describe("Manager", func() {
 		noLabelsClusterSummaryRef := &corev1.ObjectReference{
 			Namespace:  invalidClusterSummary.Namespace,
 			Name:       invalidClusterSummary.Name,
-			Kind:       configv1alpha1.ClusterSummaryKind,
-			APIVersion: configv1alpha1.GroupVersion.String(),
+			Kind:       configv1beta1.ClusterSummaryKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -344,8 +344,8 @@ var _ = Describe("Manager", func() {
 		clusterSummaryRef := &corev1.ObjectReference{
 			Namespace:  properClusterSummary.Namespace,
 			Name:       properClusterSummary.Name,
-			Kind:       configv1alpha1.ClusterSummaryKind,
-			APIVersion: configv1alpha1.GroupVersion.String(),
+			Kind:       configv1beta1.ClusterSummaryKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -369,7 +369,7 @@ var _ = Describe("Manager", func() {
 			randomString(),
 			randomString(),
 			randomString(),
-			[]configv1alpha1.FeatureSummary{},
+			[]configv1beta1.FeatureSummary{},
 		)
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -386,7 +386,7 @@ var _ = Describe("Manager", func() {
 		clusterProfileStatuses := manager.GetClusterProfileStatusesByCluster(
 			&cluster.Namespace,
 			&cluster.Name,
-			libsveltosv1alpha1.ClusterTypeCapi,
+			libsveltosv1beta1.ClusterTypeCapi,
 		)
 
 		Expect(len(clusterProfileStatuses) == 1).To(BeTrue())

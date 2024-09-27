@@ -52,7 +52,7 @@ import (
 
 	//+kubebuilder:scaffold:imports
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -131,7 +131,7 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 
 	logs.RegisterForLogSettings(ctx,
-		libsveltosv1alpha1.ComponentUIBackend, ctrl.Log.WithName("log-setter"),
+		libsveltosv1beta1.ComponentUIBackend, ctrl.Log.WithName("log-setter"),
 		ctrl.GetConfigOrDie())
 
 	debug.SetMemoryLimit(gibibytes_per_bytes)

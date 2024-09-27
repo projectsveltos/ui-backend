@@ -27,8 +27,8 @@ import (
 
 	"github.com/go-logr/logr"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 type ClusterInfo struct {
@@ -39,18 +39,18 @@ type ClusterInfo struct {
 }
 
 type ClusterProfileStatus struct {
-	ProfileName string                         `json:"profileName"`
-	ProfileType string                         `json:"profileType"`
-	Namespace   string                         `json:"namespace"`
-	ClusterType libsveltosv1alpha1.ClusterType `json:"clusterType"`
-	ClusterName string                         `json:"clusterName"`
-	Summary     []ClusterFeatureSummary        `json:"summary"`
+	ProfileName string                        `json:"profileName"`
+	ProfileType string                        `json:"profileType"`
+	Namespace   string                        `json:"namespace"`
+	ClusterType libsveltosv1beta1.ClusterType `json:"clusterType"`
+	ClusterName string                        `json:"clusterName"`
+	Summary     []ClusterFeatureSummary       `json:"summary"`
 }
 
 type ClusterFeatureSummary struct {
-	FeatureID      configv1alpha1.FeatureID     `json:"featureID"`
-	Status         configv1alpha1.FeatureStatus `json:"status,omitempty"`
-	FailureMessage *string                      `json:"failureMessage,omitempty"`
+	FeatureID      configv1beta1.FeatureID     `json:"featureID"`
+	Status         configv1beta1.FeatureStatus `json:"status,omitempty"`
+	FailureMessage *string                     `json:"failureMessage,omitempty"`
 }
 
 type instance struct {
@@ -119,7 +119,7 @@ func (m *instance) GetClusterProfileStatuses() map[corev1.ObjectReference]Cluste
 func (m *instance) GetClusterProfileStatusesByCluster(
 	clusterNamespace,
 	clusterName *string,
-	clusterType libsveltosv1alpha1.ClusterType) []ClusterProfileStatus {
+	clusterType libsveltosv1beta1.ClusterType) []ClusterProfileStatus {
 
 	m.clusterStatusesMux.Lock()
 	defer m.clusterStatusesMux.Unlock()
@@ -137,7 +137,7 @@ func (m *instance) GetClusterProfileStatusesByCluster(
 	return clusterProfileStatuses
 }
 
-func (m *instance) AddSveltosCluster(sveltosCluster *libsveltosv1alpha1.SveltosCluster) {
+func (m *instance) AddSveltosCluster(sveltosCluster *libsveltosv1beta1.SveltosCluster) {
 	info := ClusterInfo{
 		Labels:         sveltosCluster.Labels,
 		Version:        sveltosCluster.Status.Version,
@@ -158,8 +158,8 @@ func (m *instance) RemoveSveltosCluster(sveltosClusterNamespace, sveltosClusterN
 	sveltosClusterInfo := &corev1.ObjectReference{
 		Namespace:  sveltosClusterNamespace,
 		Name:       sveltosClusterName,
-		Kind:       libsveltosv1alpha1.SveltosClusterKind,
-		APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+		Kind:       libsveltosv1beta1.SveltosClusterKind,
+		APIVersion: libsveltosv1beta1.GroupVersion.String(),
 	}
 	m.clusterMux.Lock()
 	defer m.clusterMux.Unlock()
@@ -199,14 +199,14 @@ func (m *instance) RemoveCAPICluster(clusterNamespace, clusterName string) {
 	delete(m.capiClusters, *clusterInfo)
 }
 
-func (m *instance) AddClusterProfileStatus(summary *configv1alpha1.ClusterSummary) {
+func (m *instance) AddClusterProfileStatus(summary *configv1beta1.ClusterSummary) {
 	if !verifyLabelConfiguration(summary) {
 		return
 	}
 
 	// we're sure we're adding a proper cluster summary
 	// get the cluster profile name by using labels
-	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(summary)
+	profileOwnerRef, err := configv1beta1.GetProfileOwnerReference(summary)
 	if err != nil {
 		return
 	}
@@ -233,8 +233,8 @@ func (m *instance) RemoveClusterProfileStatus(summaryNamespace, summaryName stri
 	clusterProfileStatus := &corev1.ObjectReference{
 		Namespace:  summaryNamespace,
 		Name:       summaryName,
-		Kind:       configv1alpha1.ClusterSummaryKind,
-		APIVersion: configv1alpha1.GroupVersion.String(),
+		Kind:       configv1beta1.ClusterSummaryKind,
+		APIVersion: configv1beta1.GroupVersion.String(),
 	}
 	m.clusterStatusesMux.Lock()
 	defer m.clusterStatusesMux.Unlock()
@@ -274,21 +274,21 @@ func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) {
 	}
 }
 
-func verifyLabelConfiguration(summary *configv1alpha1.ClusterSummary) bool {
+func verifyLabelConfiguration(summary *configv1beta1.ClusterSummary) bool {
 	if summary.Labels == nil {
 		return false
 	}
 
-	_, err := configv1alpha1.GetProfileOwnerReference(summary)
+	_, err := configv1beta1.GetProfileOwnerReference(summary)
 	if err != nil {
 		return false
 	}
 
-	return summary.Labels[configv1alpha1.ClusterNameLabel] != "" &&
-		summary.Labels[configv1alpha1.ClusterTypeLabel] != ""
+	return summary.Labels[configv1beta1.ClusterNameLabel] != "" &&
+		summary.Labels[configv1beta1.ClusterTypeLabel] != ""
 }
 
-func MapToClusterFeatureSummaries(featureSummaries *[]configv1alpha1.FeatureSummary) []ClusterFeatureSummary {
+func MapToClusterFeatureSummaries(featureSummaries *[]configv1beta1.FeatureSummary) []ClusterFeatureSummary {
 	clusterFeatureSummaries := make([]ClusterFeatureSummary, 0, len(*featureSummaries))
 	for _, featureSummary := range *featureSummaries {
 		clusterFeatureSummary := ClusterFeatureSummary{

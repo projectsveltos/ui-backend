@@ -30,7 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -326,7 +326,7 @@ func getFailedOnlyFromQuery(c *gin.Context) bool {
 	return failedOnly
 }
 
-func getClusterFromQuery(c *gin.Context) (namespace, name string, clusterType libsveltosv1alpha1.ClusterType) {
+func getClusterFromQuery(c *gin.Context) (namespace, name string, clusterType libsveltosv1beta1.ClusterType) {
 	// Get the values from query parameters
 	queryNamespace := c.Query("namespace")
 	queryName := c.Query("name")
@@ -346,10 +346,10 @@ func getClusterFromQuery(c *gin.Context) (namespace, name string, clusterType li
 		return
 	}
 
-	if strings.EqualFold(queryType, string(libsveltosv1alpha1.ClusterTypeSveltos)) {
-		return queryNamespace, queryName, libsveltosv1alpha1.ClusterTypeSveltos
-	} else if strings.EqualFold(queryType, string(libsveltosv1alpha1.ClusterTypeCapi)) {
-		return queryNamespace, queryName, libsveltosv1alpha1.ClusterTypeCapi
+	if strings.EqualFold(queryType, string(libsveltosv1beta1.ClusterTypeSveltos)) {
+		return queryNamespace, queryName, libsveltosv1beta1.ClusterTypeSveltos
+	} else if strings.EqualFold(queryType, string(libsveltosv1beta1.ClusterTypeCapi)) {
+		return queryNamespace, queryName, libsveltosv1beta1.ClusterTypeCapi
 	}
 
 	c.JSON(http.StatusBadRequest, gin.H{"error": "cluster type is incorrect"})

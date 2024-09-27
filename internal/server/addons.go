@@ -25,8 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 type HelmRelease struct {
@@ -97,17 +97,17 @@ type ResourceResult struct {
 }
 
 func (m *instance) getHelmChartsForCluster(ctx context.Context, namespace, name string,
-	clusterType libsveltosv1alpha1.ClusterType) ([]HelmRelease, error) {
+	clusterType libsveltosv1beta1.ClusterType) ([]HelmRelease, error) {
 
 	// Even though only one ClusterConfiguration exists for a given cluster,
 	// we are doing a list vs a Get because how to build name of a ClusterConfiguration
 	// is not exposed
-	clusterConfigurations := &configv1alpha1.ClusterConfigurationList{}
+	clusterConfigurations := &configv1beta1.ClusterConfigurationList{}
 	listOptions := []client.ListOption{
 		client.InNamespace(namespace),
 		client.MatchingLabels{
-			configv1alpha1.ClusterNameLabel: name,
-			configv1alpha1.ClusterTypeLabel: string(clusterType),
+			configv1beta1.ClusterNameLabel: name,
+			configv1beta1.ClusterTypeLabel: string(clusterType),
 		},
 	}
 
@@ -130,17 +130,17 @@ func (m *instance) getHelmChartsForCluster(ctx context.Context, namespace, name 
 }
 
 func (m *instance) getResourcesForCluster(ctx context.Context, namespace, name string,
-	clusterType libsveltosv1alpha1.ClusterType) ([]Resource, error) {
+	clusterType libsveltosv1beta1.ClusterType) ([]Resource, error) {
 
 	// Even though only one ClusterConfiguration exists for a given cluster,
 	// we are doing a list vs a Get because how to build name of a ClusterConfiguration
 	// is not exposed
-	clusterConfigurations := &configv1alpha1.ClusterConfigurationList{}
+	clusterConfigurations := &configv1beta1.ClusterConfigurationList{}
 	listOptions := []client.ListOption{
 		client.InNamespace(namespace),
 		client.MatchingLabels{
-			configv1alpha1.ClusterNameLabel: name,
-			configv1alpha1.ClusterTypeLabel: string(clusterType),
+			configv1beta1.ClusterNameLabel: name,
+			configv1beta1.ClusterTypeLabel: string(clusterType),
 		},
 	}
 
@@ -179,7 +179,7 @@ func (m *instance) getResourcesForCluster(ctx context.Context, namespace, name s
 }
 
 // getHelmReleases returns list of helm releases deployed in a given cluster
-func getHelmReleases(clusterConfiguration *configv1alpha1.ClusterConfiguration,
+func getHelmReleases(clusterConfiguration *configv1beta1.ClusterConfiguration,
 ) []HelmRelease {
 
 	results := make([]HelmRelease, 0)
@@ -187,18 +187,18 @@ func getHelmReleases(clusterConfiguration *configv1alpha1.ClusterConfiguration,
 	for i := range clusterConfiguration.Status.ClusterProfileResources {
 		r := clusterConfiguration.Status.ClusterProfileResources[i]
 		results = append(results,
-			addDeployedCharts(configv1alpha1.ClusterProfileKind, r.ClusterProfileName, r.Features)...)
+			addDeployedCharts(configv1beta1.ClusterProfileKind, r.ClusterProfileName, r.Features)...)
 	}
 	for i := range clusterConfiguration.Status.ProfileResources {
 		r := clusterConfiguration.Status.ProfileResources[i]
 		results = append(results,
-			addDeployedCharts(configv1alpha1.ProfileKind, r.ProfileName, r.Features)...)
+			addDeployedCharts(configv1beta1.ProfileKind, r.ProfileName, r.Features)...)
 	}
 
 	return results
 }
 
-func addDeployedCharts(profileKind, profileName string, features []configv1alpha1.Feature,
+func addDeployedCharts(profileKind, profileName string, features []configv1beta1.Feature,
 ) []HelmRelease {
 
 	results := make([]HelmRelease, 0)
@@ -210,7 +210,7 @@ func addDeployedCharts(profileKind, profileName string, features []configv1alpha
 	return results
 }
 
-func addDeployedChartsForFeature(profileName string, charts []configv1alpha1.Chart,
+func addDeployedChartsForFeature(profileName string, charts []configv1beta1.Chart,
 ) []HelmRelease {
 
 	results := make([]HelmRelease, 0)
@@ -233,25 +233,25 @@ func addDeployedChartsForFeature(profileName string, charts []configv1alpha1.Cha
 }
 
 // getResources returns list of resources deployed in a given cluster
-func getResources(clusterConfiguration *configv1alpha1.ClusterConfiguration,
-) map[configv1alpha1.Resource][]string {
+func getResources(clusterConfiguration *configv1beta1.ClusterConfiguration,
+) map[configv1beta1.Resource][]string {
 
-	results := make(map[configv1alpha1.Resource][]string)
+	results := make(map[configv1beta1.Resource][]string)
 
 	for i := range clusterConfiguration.Status.ClusterProfileResources {
 		r := clusterConfiguration.Status.ClusterProfileResources[i]
-		addDeployedResources(configv1alpha1.ClusterProfileKind, r.ClusterProfileName, r.Features, results)
+		addDeployedResources(configv1beta1.ClusterProfileKind, r.ClusterProfileName, r.Features, results)
 	}
 	for i := range clusterConfiguration.Status.ProfileResources {
 		r := clusterConfiguration.Status.ProfileResources[i]
-		addDeployedResources(configv1alpha1.ProfileKind, r.ProfileName, r.Features, results)
+		addDeployedResources(configv1beta1.ProfileKind, r.ProfileName, r.Features, results)
 	}
 
 	return results
 }
 
 func addDeployedResources(profilesKind, profileName string,
-	features []configv1alpha1.Feature, results map[configv1alpha1.Resource][]string) {
+	features []configv1beta1.Feature, results map[configv1beta1.Resource][]string) {
 
 	for i := range features {
 		addDeployedResourcesForFeature(
@@ -261,7 +261,7 @@ func addDeployedResources(profilesKind, profileName string,
 }
 
 func addDeployedResourcesForFeature(profileName string,
-	resources []configv1alpha1.Resource, results map[configv1alpha1.Resource][]string) {
+	resources []configv1beta1.Resource, results map[configv1beta1.Resource][]string) {
 
 	for i := range resources {
 		resource := &resources[i]

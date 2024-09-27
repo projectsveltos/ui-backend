@@ -1,7 +1,7 @@
 package server
 
 import (
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
 
 type ProfileStatusResult struct {
@@ -41,8 +41,8 @@ func flattenProfileStatus(profileStatus *ClusterProfileStatus, failedOnly bool) 
 }
 
 func isCompleted(cfs ClusterFeatureSummary) bool {
-	if cfs.Status != configv1alpha1.FeatureStatusProvisioned &&
-		cfs.Status != configv1alpha1.FeatureStatusRemoved {
+	if cfs.Status != configv1beta1.FeatureStatusProvisioned &&
+		cfs.Status != configv1beta1.FeatureStatusRemoved {
 
 		return false
 	}
