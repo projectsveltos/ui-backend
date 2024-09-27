@@ -28,13 +28,6 @@ rules:
   - cluster.x-k8s.io
   resources:
   - clusters
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
   - clusters/status
   verbs:
   - get
@@ -44,21 +37,7 @@ rules:
   - config.projectsveltos.io
   resources:
   - clusterconfigurations
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
   - clustersummaries
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
   - clustersummaries/status
   verbs:
   - get
@@ -68,21 +47,7 @@ rules:
   - lib.projectsveltos.io
   resources:
   - debuggingconfigurations
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
   - sveltosclusters
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
   - sveltosclusters/status
   verbs:
   - get

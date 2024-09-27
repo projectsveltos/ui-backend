@@ -15,7 +15,7 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/ui-backend/internal/server"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
 
 type ClusterSummaryReconciler struct {
@@ -31,7 +31,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(logs.LogInfo).Info("Reconciling")
 
-	clusterSummary := &configv1alpha1.ClusterSummary{}
+	clusterSummary := &configv1beta1.ClusterSummary{}
 	if err := r.Get(ctx, req.NamespacedName, clusterSummary); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.removeClusterSummary(req.Namespace, req.Name, logger)
@@ -66,7 +66,7 @@ func (r *ClusterSummaryReconciler) removeClusterSummary(clusterSummaryNamespace,
 	logger.V(logs.LogInfo).Info("Reconcile delete success")
 }
 
-func (r *ClusterSummaryReconciler) reconcileNormal(clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) {
+func (r *ClusterSummaryReconciler) reconcileNormal(clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) {
 	logger.V(logs.LogInfo).Info("Reconciling new ClusterSummary")
 
 	manager := server.GetManagerInstance()
@@ -79,7 +79,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(clusterSummary *configv1alpha
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	_, err := ctrl.NewControllerManagedBy(mgr).
-		For(&configv1alpha1.ClusterSummary{}).
+		For(&configv1beta1.ClusterSummary{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).

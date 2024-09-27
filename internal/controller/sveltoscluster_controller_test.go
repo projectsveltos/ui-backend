@@ -30,22 +30,22 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2/textlogger"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/ui-backend/internal/controller"
 	"github.com/projectsveltos/ui-backend/internal/server"
 )
 
 var _ = Describe("SveltosClusterReconciler", func() {
-	var sveltosCluster *libsveltosv1alpha1.SveltosCluster
+	var sveltosCluster *libsveltosv1beta1.SveltosCluster
 	var logger logr.Logger
 
 	BeforeEach(func() {
-		sveltosCluster = &libsveltosv1alpha1.SveltosCluster{
+		sveltosCluster = &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: randomString(),
 			},
-			Spec: libsveltosv1alpha1.SveltosClusterSpec{
+			Spec: libsveltosv1beta1.SveltosClusterSpec{
 				KubeconfigName: randomString(),
 			},
 		}
@@ -54,7 +54,7 @@ var _ = Describe("SveltosClusterReconciler", func() {
 	})
 
 	It("reconcile adds/removes SveltosCluster to/from list of existing clusters", func() {
-		sveltosCluster.Status = libsveltosv1alpha1.SveltosClusterStatus{
+		sveltosCluster.Status = libsveltosv1beta1.SveltosClusterStatus{
 			Ready:   true,
 			Version: "v1.29.0",
 		}
@@ -84,8 +84,8 @@ var _ = Describe("SveltosClusterReconciler", func() {
 		cluster := &corev1.ObjectReference{
 			Namespace:  sveltosCluster.Namespace,
 			Name:       sveltosCluster.Name,
-			Kind:       libsveltosv1alpha1.SveltosClusterKind,
-			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
 		}
 
 		manager := server.GetManagerInstance()
