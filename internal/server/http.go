@@ -90,6 +90,8 @@ var (
 		manager := GetManagerInstance()
 		clusters := manager.GetManagedSveltosClusters()
 		managedClusterData := getManagedClusterData(clusters, filters)
+		sort.Sort(managedClusterData)
+
 		result, err := getClustersInRange(managedClusterData, limit, skip)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
