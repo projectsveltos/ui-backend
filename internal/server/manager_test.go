@@ -196,11 +196,12 @@ var _ = Describe("Manager", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
 		manager := server.GetManagerInstance()
 		manager.AddSveltosCluster(sveltosCluster)
 
-		clusters := manager.GetManagedSveltosClusters()
+		clusters, err := manager.GetManagedSveltosClusters(context.TODO(), true, randomString())
+		Expect(err).To(BeNil())
 		v, ok := clusters[*clusterRef]
 		Expect(ok).To(BeTrue())
 		Expect(reflect.DeepEqual(v, clusterInfo)).To(BeTrue())
@@ -217,22 +218,25 @@ var _ = Describe("Manager", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
 		manager := server.GetManagerInstance()
 		manager.AddSveltosCluster(sveltosCluster)
 
-		clusters := manager.GetManagedSveltosClusters()
+		clusters, err := manager.GetManagedSveltosClusters(context.TODO(), true, randomString())
+		Expect(err).To(BeNil())
 		_, ok := clusters[*clusterRef]
 		Expect(ok).To(BeTrue())
 
 		manager.RemoveSveltosCluster(sveltosCluster.Namespace, sveltosCluster.Name)
-		clusters = manager.GetManagedSveltosClusters()
+		clusters, err = manager.GetManagedSveltosClusters(context.TODO(), true, randomString())
+		Expect(err).To(BeNil())
 		_, ok = clusters[*clusterRef]
 		Expect(ok).To(BeFalse())
 
 		// verify operation is idempotent
 		manager.RemoveSveltosCluster(sveltosCluster.Namespace, sveltosCluster.Name)
-		clusters = manager.GetManagedSveltosClusters()
+		clusters, err = manager.GetManagedSveltosClusters(context.TODO(), true, randomString())
+		Expect(err).To(BeNil())
 		_, ok = clusters[*clusterRef]
 		Expect(ok).To(BeFalse())
 	})
@@ -255,11 +259,12 @@ var _ = Describe("Manager", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
 		manager := server.GetManagerInstance()
 		manager.AddCAPICluster(cluster)
 
-		clusters := manager.GetManagedCAPIClusters()
+		clusters, err := manager.GetManagedCAPIClusters(context.TODO(), true, randomString())
+		Expect(err).To(BeNil())
 		v, ok := clusters[*clusterRef]
 		Expect(ok).To(BeTrue())
 		Expect(reflect.DeepEqual(v, clusterInfo)).To(BeTrue())
@@ -276,22 +281,25 @@ var _ = Describe("Manager", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
 		manager := server.GetManagerInstance()
 		manager.AddCAPICluster(cluster)
 
-		clusters := manager.GetManagedCAPIClusters()
+		clusters, err := manager.GetManagedCAPIClusters(context.TODO(), true, randomString())
+		Expect(err).To(BeNil())
 		_, ok := clusters[*clusterRef]
 		Expect(ok).To(BeTrue())
 
 		manager.RemoveCAPICluster(cluster.Namespace, cluster.Name)
-		clusters = manager.GetManagedCAPIClusters()
+		clusters, err = manager.GetManagedCAPIClusters(context.TODO(), true, randomString())
+		Expect(err).To(BeNil())
 		_, ok = clusters[*clusterRef]
 		Expect(ok).To(BeFalse())
 
 		// verify operation is idempotent
 		manager.RemoveCAPICluster(cluster.Namespace, cluster.Name)
-		clusters = manager.GetManagedCAPIClusters()
+		clusters, err = manager.GetManagedCAPIClusters(context.TODO(), true, randomString())
+		Expect(err).To(BeNil())
 		_, ok = clusters[*clusterRef]
 		Expect(ok).To(BeFalse())
 	})
@@ -323,7 +331,7 @@ var _ = Describe("Manager", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
 		manager := server.GetManagerInstance()
 
 		// test it has been added
@@ -351,7 +359,7 @@ var _ = Describe("Manager", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
 		manager := server.GetManagerInstance()
 
 		// test it has been added
@@ -375,11 +383,14 @@ var _ = Describe("Manager", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		server.InitializeManagerInstance(ctx, c, scheme, randomPort(), logger)
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
 		manager := server.GetManagerInstance()
 
 		// make sure there's already an existing cluster in the manager
-		Expect(len(manager.GetManagedCAPIClusters()) == 1).To(BeTrue())
+		clusters, err := manager.GetManagedCAPIClusters(context.TODO(), true, randomString())
+		Expect(err).To(BeNil())
+
+		Expect(len(clusters) == 1).To(BeTrue())
 		manager.AddClusterProfileStatus(properClusterSummary)
 		manager.AddClusterProfileStatus(additionalClusterSummary)
 

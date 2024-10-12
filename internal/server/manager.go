@@ -18,17 +18,20 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/go-logr/logr"
-
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
 type ClusterInfo struct {
@@ -54,10 +57,12 @@ type ClusterFeatureSummary struct {
 }
 
 type instance struct {
+	config             *rest.Config
 	client             client.Client
 	scheme             *runtime.Scheme
 	clusterMux         sync.RWMutex // use a Mutex to update managed Clusters
 	clusterStatusesMux sync.RWMutex // mutex to update cached ClusterSummary instances
+	logger             logr.Logger
 
 	sveltosClusters      map[corev1.ObjectReference]ClusterInfo
 	capiClusters         map[corev1.ObjectReference]ClusterInfo
@@ -70,14 +75,15 @@ var (
 )
 
 // InitializeManagerInstance initializes manager instance
-func InitializeManagerInstance(ctx context.Context, c client.Client, scheme *runtime.Scheme,
-	port string, logger logr.Logger) {
+func InitializeManagerInstance(ctx context.Context, config *rest.Config, c client.Client,
+	scheme *runtime.Scheme, port string, logger logr.Logger) {
 
 	if managerInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()
 		if managerInstance == nil {
 			managerInstance = &instance{
+				config:               config,
 				client:               c,
 				sveltosClusters:      make(map[corev1.ObjectReference]ClusterInfo),
 				capiClusters:         make(map[corev1.ObjectReference]ClusterInfo),
@@ -85,6 +91,7 @@ func InitializeManagerInstance(ctx context.Context, c client.Client, scheme *run
 				clusterMux:           sync.RWMutex{},
 				clusterStatusesMux:   sync.RWMutex{},
 				scheme:               scheme,
+				logger:               logger,
 			}
 
 			go func() {
@@ -98,16 +105,87 @@ func GetManagerInstance() *instance {
 	return managerInstance
 }
 
-func (m *instance) GetManagedSveltosClusters() map[corev1.ObjectReference]ClusterInfo {
-	m.clusterMux.RLock()
-	defer m.clusterMux.RUnlock()
-	return m.sveltosClusters
+func (m *instance) GetManagedSveltosClusters(ctx context.Context, canListAll bool, user string,
+) (map[corev1.ObjectReference]ClusterInfo, error) {
+
+	// If user can list all SveltosClusters, return cached data
+	if canListAll {
+		m.clusterMux.RLock()
+		defer m.clusterMux.RUnlock()
+		return m.sveltosClusters, nil
+	}
+
+	// If user cannot list all SveltosClusters, run a List so to get only SveltosClusters user has access to
+	// List (vs using m.sveltosClusters) is intentionally done to avoid taking lock for too long
+	sveltosClusters := &libsveltosv1beta1.SveltosClusterList{}
+	err := m.client.List(ctx, sveltosClusters)
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list SveltosClusters: %v", err))
+		return nil, err
+	}
+
+	result := map[corev1.ObjectReference]ClusterInfo{}
+	for i := range sveltosClusters.Items {
+		sc := &sveltosClusters.Items[i]
+		ok, err := m.canGetSveltosCluster(sc.Namespace, sc.Name, user)
+		if err != nil {
+			continue
+		}
+		if ok {
+			info := ClusterInfo{
+				Labels:         sc.Labels,
+				Version:        sc.Status.Version,
+				Ready:          sc.Status.Ready,
+				FailureMessage: sc.Status.FailureMessage,
+			}
+
+			sveltosClusterInfo := getKeyFromObject(m.scheme, sc)
+			result[*sveltosClusterInfo] = info
+		}
+	}
+
+	return result, nil
 }
 
-func (m *instance) GetManagedCAPIClusters() map[corev1.ObjectReference]ClusterInfo {
-	m.clusterMux.RLock()
-	defer m.clusterMux.RUnlock()
-	return m.capiClusters
+func (m *instance) GetManagedCAPIClusters(ctx context.Context, canListAll bool, user string,
+) (map[corev1.ObjectReference]ClusterInfo, error) {
+
+	// If user can list all CAPI Clusters, return cached data
+	if canListAll {
+		m.clusterMux.RLock()
+		defer m.clusterMux.RUnlock()
+		return m.capiClusters, nil
+	}
+
+	// If user cannot list all SveltosClusters, run a List so to get only SveltosClusters user has access to
+	// List (vs using m.capiClusters) is intentionally done to avoid taking lock for too long
+	clusters := &clusterv1.ClusterList{}
+	err := m.client.List(ctx, clusters)
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list Clusters: %v", err))
+		return nil, err
+	}
+
+	result := map[corev1.ObjectReference]ClusterInfo{}
+	for i := range clusters.Items {
+		capiCluster := &clusters.Items[i]
+		ok, err := m.canGetCAPICluster(capiCluster.Namespace, capiCluster.Name, user)
+		if err != nil {
+			continue
+		}
+		if ok {
+			info := ClusterInfo{
+				Labels:         capiCluster.Labels,
+				Ready:          capiCluster.Status.ControlPlaneReady,
+				FailureMessage: capiCluster.Status.FailureMessage,
+			}
+
+			capiClusterInfo := getKeyFromObject(m.scheme, capiCluster)
+			result[*capiClusterInfo] = info
+		}
+	}
+
+	return result, nil
 }
 
 func (m *instance) GetClusterProfileStatuses() map[corev1.ObjectReference]ClusterProfileStatus {
@@ -300,4 +378,23 @@ func MapToClusterFeatureSummaries(featureSummaries *[]configv1beta1.FeatureSumma
 	}
 
 	return clusterFeatureSummaries
+}
+
+func (m *instance) validateToken(token string) error {
+	config, err := m.getKubernetesRestConfig(token)
+	if err != nil {
+		return err
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	_, err = clientset.Discovery().ServerVersion()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

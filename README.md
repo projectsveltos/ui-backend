@@ -12,6 +12,12 @@ Please refere to sveltos [documentation](https://projectsveltos.github.io/svelto
 ## What this repository is
 This repo contains a service that exposes all APIs used by Sveltos frontend.
 
+### Authorization Header
+
+Using authorization header is the only way to contact backend as an user, when accessing it over HTTP.
+To use authorization header you simply need to pass `Authorization: Bearer <token>` in every request.
+To create sample user and to get its token, see [Creating sample user](#how-to-get-token) guide.
+
 ### Get ClusterAPI powered clusters
 
 ```/capiclusters```
@@ -258,6 +264,39 @@ returns
   ],
   "totalResources": 3
 }
+```
+
+### How to get token
+
+First, create a service account in the desired namespace:
+
+```
+kubectl create sa <user> -n <namespace>
+```
+
+Give the service account permissions to access the Calico Enterprise Manager UI, and a Calico Enterprise cluster role:
+
+```
+kubectl create clusterrolebinding <binding_name> --clusterrole <role_name> --serviceaccount <namespace>:<service_account>
+```
+
+where:
+
+- **binding_name** is a descriptive name for the rolebinding.
+- **role_name** is one of the default cluster roles (or a custom cluster role) specifying permissions.
+- **namespace** is the service account's namespace.
+- **service_account** is the service account that the permissions are being associated with.
+
+Next, create a bearer token for the service account. Using the running example of a service account named, sveltos in the _default_ namespace:
+
+```
+kubectl create token sveltos --duration=24h
+```
+
+it should print somthing like
+
+```
+eyJhbGciOiJSUzI1NiIsImtpZCI6IkVsYW8zRU9BMWw3UTZ2QUpjNGFRLXljcTU4M1NhaXBZd1ZNWXJySkVtMTAifQ.eyJhdWQiOlsiaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjLmNsdXN0ZXIubG9jYWwiXSwiZXhwIjoxNzI4NzE3NjA0LCJpYXQiOjE3Mjg2MzEyMDQsImlzcyI6Imh0dHBzOi8va3ViZXJuZXRlcy5kZWZhdWx0LnN2Yy5jbHVzdGVyLmxvY2FsIiwianRpIjoiZmQ1OWU4OTctODZlNS00MDQ4LWEwZjAtMDMxYjM5MjVlYjQwIiwia3ViZXJuZXRlcy5pbyI6eyJuYW1lc3BhY2UiOiJwbGF0Zm9ybSIsInNlcnZpY2VhY2NvdW50Ijp7Im5hbWUiOiJtZ2lhbmx1YyIsInVpZCI6ImJjZWUwZDEwLWM2MTQtNDIzNi1iNmZmLTAyYWU2M2M1MjcxZiJ9fSwibmJmIjoxNzI4NjMxMjA0LCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6cGxhdGZvcm06bWdpYW5sdWMifQ.JlEN38Whyb4mlNsWkC4RAQ82dVUJmWvmdvar7VVxEw2SUgoQthQQPsV-l28bGYpuQspFlsdaO2JRdhm6MGctlMJziweHHm3PNv_RBnFMPRQ01y7ciaRZXE7HEB3sAndvBEQKNWyo4wmmyRnEE2tR79ICQRTLmuWO17MjRIZFChXMHsCsam5OsuE6mE1fj3RSUSbvfRbQwrsTcWOrnYxzquyNVyJyOKxQ97Nm175rez5x9EflHPwueYu5FmNgz3cxMsdkHwkrMnhMqMyNN8WBqKUrju-gPJ9GB-cOcrR_38JyeQBPXYTo9J0tueIWEyaiwKvmPqAsnyHKPT5p-7hFCQ
 ```
 
 ## Contributing 

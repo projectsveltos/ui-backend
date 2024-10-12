@@ -145,7 +145,7 @@ func main() {
 	go startClusterController(ctx, mgr, setupLog)
 	go startClusterSummaryController(mgr)
 
-	server.InitializeManagerInstance(ctx, mgr.GetClient(), scheme,
+	server.InitializeManagerInstance(ctx, mgr.GetConfig(), mgr.GetClient(), scheme,
 		httpPort, ctrl.Log.WithName("gin"))
 
 	setupLog.Info("starting manager")

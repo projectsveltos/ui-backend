@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -38,6 +39,10 @@ const (
 	maxItems = 6
 )
 
+type Token struct {
+	Value string `json:"token,omitempty"`
+}
+
 var (
 	ginLogger logr.Logger
 
@@ -50,12 +55,32 @@ var (
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
 		}
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: namespace %q name %q labels %q",
 			filters.Namespace, filters.name, filters.labelSelector))
 
+		user, err := validateToken(c)
+		if err != nil {
+			return
+		}
+
 		manager := GetManagerInstance()
-		clusters := manager.GetManagedCAPIClusters()
+
+		canListAll, err := manager.canListCAPIClusters(user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		clusters, err := manager.GetManagedCAPIClusters(c.Request.Context(), canListAll, user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
 		managedClusterData := getManagedClusterData(clusters, filters)
 		sort.Sort(managedClusterData)
 
@@ -63,6 +88,7 @@ var (
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
 		}
 
 		response := ClusterResult{
@@ -83,12 +109,32 @@ var (
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
 		}
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: namespace %q name %q labels %q",
 			filters.Namespace, filters.name, filters.labelSelector))
 
+		user, err := validateToken(c)
+		if err != nil {
+			return
+		}
+
 		manager := GetManagerInstance()
-		clusters := manager.GetManagedSveltosClusters()
+
+		canListAll, err := manager.canListSveltosClusters(user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		clusters, err := manager.GetManagedSveltosClusters(c.Request.Context(), canListAll, user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
 		managedClusterData := getManagedClusterData(clusters, filters)
 		sort.Sort(managedClusterData)
 
@@ -96,6 +142,7 @@ var (
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
 		}
 
 		response := ClusterResult{
@@ -116,12 +163,31 @@ var (
 		limit, skip := getLimitAndSkipFromQuery(c)
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
 
+		user, err := validateToken(c)
+		if err != nil {
+			return
+		}
+
 		manager := GetManagerInstance()
+
+		canGetCluster, err := manager.canGetCluster(namespace, name, user, clusterType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if !canGetCluster {
+			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this cluster"))
+			return
+		}
+
 		helmCharts, err := manager.getHelmChartsForCluster(c.Request.Context(),
 			namespace, name, clusterType)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
 		}
 		sort.Slice(helmCharts, func(i, j int) bool {
 			return sortHelmCharts(helmCharts, i, j)
@@ -131,6 +197,7 @@ var (
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
 		}
 
 		response := HelmReleaseResult{
@@ -150,12 +217,31 @@ var (
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
 
+		user, err := validateToken(c)
+		if err != nil {
+			return
+		}
+
 		manager := GetManagerInstance()
+
+		canGetCluster, err := manager.canGetCluster(namespace, name, user, clusterType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if !canGetCluster {
+			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this cluster"))
+			return
+		}
+
 		resources, err := manager.getResourcesForCluster(c.Request.Context(),
 			namespace, name, clusterType)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
 		}
 		sort.Slice(resources, func(i, j int) bool {
 			return sortResources(resources, i, j)
@@ -165,6 +251,7 @@ var (
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
 		}
 
 		response := ResourceResult{
@@ -186,7 +273,25 @@ var (
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("failed %t", failedOnly))
 
+		user, err := validateToken(c)
+		if err != nil {
+			return
+		}
+
 		manager := GetManagerInstance()
+
+		canGetCluster, err := manager.canGetCluster(namespace, name, user, clusterType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if !canGetCluster {
+			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this cluster"))
+			return
+		}
+
 		clusterProfileStatuses := manager.GetClusterProfileStatusesByCluster(&namespace, &name, clusterType)
 
 		flattenedProfileStatuses := flattenProfileStatuses(clusterProfileStatuses, failedOnly)
@@ -198,6 +303,7 @@ var (
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{
@@ -356,4 +462,61 @@ func getClusterFromQuery(c *gin.Context) (namespace, name string, clusterType li
 
 	c.JSON(http.StatusBadRequest, gin.H{"error": "cluster type is incorrect"})
 	return
+}
+
+func getTokenFromAuthorizationHeader(c *gin.Context) (string, error) {
+	// Get the authorization header value
+	authorizationHeader := c.GetHeader("Authorization")
+
+	// Check if the authorization header is present
+	if authorizationHeader == "" {
+		errorMsg := "authorization header is missing"
+		c.JSON(http.StatusUnauthorized, gin.H{"error": errorMsg})
+		return "", errors.New(errorMsg)
+	}
+
+	// Extract the token from the authorization header
+	// Assuming the authorization header format is "Bearer <token>"
+	token := authorizationHeader[len("Bearer "):]
+	// Check if the token is present
+	if token == "" {
+		errorMsg := "token is missing"
+		c.JSON(http.StatusUnauthorized, gin.H{"error": errorMsg})
+		return "", errors.New(errorMsg)
+	}
+
+	return token, nil
+}
+
+// validateToken:
+// - gets token from authorization request. Returns an error if missing
+// - validate token. Returns an error if this check fails
+// - get and return user info. Returns an error if getting user from token fails
+func validateToken(c *gin.Context) (string, error) {
+	token, err := getTokenFromAuthorizationHeader(c)
+	if err != nil {
+		ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get token from authorization request. Request %s, error %v",
+			c.Request.URL, err))
+		_ = c.AbortWithError(http.StatusUnauthorized, errors.New("failed to get token from authorization request"))
+		return "", err
+	}
+
+	manager := GetManagerInstance()
+	err = manager.validateToken(token)
+	if err != nil {
+		ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate token: %v", err))
+		_ = c.AbortWithError(http.StatusUnauthorized, errors.New("failed to validate token"))
+		return "", err
+	}
+
+	user, err := manager.getUserFromToken(token)
+	if err != nil {
+		ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get user from token: %v", err))
+		_ = c.AbortWithError(http.StatusUnauthorized, errors.New("failed to get user from token"))
+		return "", err
+	}
+
+	ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("user %s", user))
+
+	return user, nil
 }
