@@ -62,6 +62,7 @@ var (
 
 		user, err := validateToken(c)
 		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
 			return
 		}
 
@@ -116,6 +117,7 @@ var (
 
 		user, err := validateToken(c)
 		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
 			return
 		}
 
@@ -165,6 +167,7 @@ var (
 
 		user, err := validateToken(c)
 		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
 			return
 		}
 
@@ -219,6 +222,7 @@ var (
 
 		user, err := validateToken(c)
 		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
 			return
 		}
 
@@ -275,6 +279,7 @@ var (
 
 		user, err := validateToken(c)
 		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
 			return
 		}
 
