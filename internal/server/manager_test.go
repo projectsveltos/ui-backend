@@ -36,6 +36,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	"github.com/projectsveltos/ui-backend/internal/server"
 )
 
@@ -371,7 +372,6 @@ var _ = Describe("Manager", func() {
 	})
 
 	It("GetClusterProfileStatusesByCluster returns a list of ClusterProfileStatus belonging to a cluster given in input", func() {
-
 		additionalClusterSummary := createTestClusterSummary(
 			"additionalSummary",
 			randomString(),
@@ -405,5 +405,202 @@ var _ = Describe("Manager", func() {
 		// as it is the only one that belongs to the cluster with Namespace cluster.Namespace and
 		// Name cluster.Name
 		Expect(clusterProfileStatuses[0].ProfileName == properClusterSummary.Name).To(BeTrue())
+	})
+
+	It("AddProfile adds a profile and update dependencies", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		namespace := randomString()
+
+		profile0 := &corev1.ObjectReference{
+			Namespace:  namespace,
+			Name:       randomString(),
+			Kind:       configv1beta1.ProfileKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
+		}
+
+		// test it has been added
+		tier := int32(10)
+		manager.AddProfile(profile0, libsveltosv1beta1.Selector{}, tier, nil)
+
+		profiles, err := manager.GetProfiles(context.TODO(), true, true, randomString())
+		Expect(err).To(BeNil())
+
+		Expect(len(profiles)).To(Equal(1))
+		profileInfo, ok := profiles[*profile0]
+		Expect(ok).To(BeTrue())
+		Expect(profileInfo.Tier).To(Equal(tier))
+		Expect(profileInfo.Dependencies.Len()).To(Equal(0))
+		Expect(profileInfo.Dependents.Len()).To(Equal(0))
+
+		profile1 := &corev1.ObjectReference{
+			Namespace:  namespace,
+			Name:       randomString(),
+			Kind:       configv1beta1.ProfileKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
+		}
+
+		dependecies := &libsveltosset.Set{}
+		// Make profile1 depend on profile
+		dependecies.Insert(profile0) // profile1 depends on profile0
+
+		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier, dependecies)
+
+		profiles, err = manager.GetProfiles(context.TODO(), true, true, randomString())
+		Expect(err).To(BeNil())
+
+		profileInfo, ok = profiles[*profile0]
+		Expect(ok).To(BeTrue())
+		Expect(profileInfo.Tier).To(Equal(tier))
+		Expect(profileInfo.Dependencies.Len()).To(Equal(0))
+		Expect(profileInfo.Dependents.Len()).To(Equal(1))
+		Expect(profileInfo.Dependents.Items()).To(ContainElement(*profile1))
+
+		profileInfo, ok = profiles[*profile1]
+		Expect(ok).To(BeTrue())
+		Expect(profileInfo.Tier).To(Equal(tier))
+		Expect(profileInfo.Dependencies.Len()).To(Equal(1))
+		Expect(profileInfo.Dependencies.Items()).To(ContainElement(*profile0))
+		Expect(profileInfo.Dependents.Len()).To(Equal(0))
+
+		// Remove profile1 dependency on profile0
+		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier, nil)
+
+		profiles, err = manager.GetProfiles(context.TODO(), true, true, randomString())
+		Expect(err).To(BeNil())
+
+		Expect(len(profiles)).To(Equal(2))
+		profileInfo, ok = profiles[*profile0]
+		Expect(ok).To(BeTrue())
+		Expect(profileInfo.Tier).To(Equal(tier))
+		Expect(profileInfo.Dependencies.Len()).To(Equal(0))
+		Expect(profileInfo.Dependents.Len()).To(Equal(0))
+
+		profileInfo, ok = profiles[*profile1]
+		Expect(ok).To(BeTrue())
+		Expect(profileInfo.Tier).To(Equal(tier))
+		Expect(profileInfo.Dependencies.Len()).To(Equal(0))
+		Expect(profileInfo.Dependents.Len()).To(Equal(0))
+	})
+
+	It("AddProfile adds multiple dependents", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		namespace := randomString()
+
+		profile0 := &corev1.ObjectReference{
+			Namespace:  namespace,
+			Name:       randomString(),
+			Kind:       configv1beta1.ProfileKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
+		}
+
+		// test it has been added
+		tier := int32(10)
+		manager.AddProfile(profile0, libsveltosv1beta1.Selector{}, tier, nil)
+
+		profile1 := &corev1.ObjectReference{
+			Namespace:  namespace,
+			Name:       randomString(),
+			Kind:       configv1beta1.ProfileKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
+		}
+		dependecies := &libsveltosset.Set{}
+		// Make profile1 depend on profile0
+		dependecies.Insert(profile0) // profile1 depends on profile0
+		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier, dependecies)
+
+		profile2 := &corev1.ObjectReference{
+			Namespace:  namespace,
+			Name:       randomString(),
+			Kind:       configv1beta1.ProfileKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
+		}
+		dependecies = &libsveltosset.Set{}
+		// Make profile2 depend on profile1
+		dependecies.Insert(profile1) // profile2 depends on profile1
+		manager.AddProfile(profile2, libsveltosv1beta1.Selector{}, tier, dependecies)
+
+		profiles, err := manager.GetProfiles(context.TODO(), true, true, randomString())
+		Expect(err).To(BeNil())
+
+		profileInfo, ok := profiles[*profile0]
+		Expect(ok).To(BeTrue())
+		Expect(profileInfo.Tier).To(Equal(tier))
+		Expect(profileInfo.Dependencies.Len()).To(Equal(0))
+		Expect(profileInfo.Dependents.Len()).To(Equal(1))
+		Expect(profileInfo.Dependents.Items()).To(ContainElement(*profile1))
+
+		profileInfo, ok = profiles[*profile1]
+		Expect(ok).To(BeTrue())
+		Expect(profileInfo.Tier).To(Equal(tier))
+		Expect(profileInfo.Dependencies.Len()).To(Equal(1))
+		Expect(profileInfo.Dependencies.Items()).To(ContainElement(*profile0))
+		Expect(profileInfo.Dependents.Len()).To(Equal(1))
+		Expect(profileInfo.Dependents.Items()).To(ContainElement(*profile2))
+
+		profileInfo, ok = profiles[*profile2]
+		Expect(ok).To(BeTrue())
+		Expect(profileInfo.Tier).To(Equal(tier))
+		Expect(profileInfo.Dependencies.Len()).To(Equal(1))
+		Expect(profileInfo.Dependencies.Items()).To(ContainElement(*profile1))
+		Expect(profileInfo.Dependents.Len()).To(Equal(0))
+	})
+
+	It("RemoveProfile removes profiles from cached data and updates all dependents", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		namespace := randomString()
+
+		profile0 := &corev1.ObjectReference{
+			Namespace:  namespace,
+			Name:       randomString(),
+			Kind:       configv1beta1.ProfileKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
+		}
+
+		// test it has been added
+		tier := int32(10)
+		manager.AddProfile(profile0, libsveltosv1beta1.Selector{}, tier, nil)
+
+		profile1 := &corev1.ObjectReference{
+			Namespace:  namespace,
+			Name:       randomString(),
+			Kind:       configv1beta1.ProfileKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
+		}
+		dependecies := &libsveltosset.Set{}
+		// Make profile1 depend on profile0
+		dependecies.Insert(profile0) // profile1 depends on profile0
+		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier, dependecies)
+
+		profiles, err := manager.GetProfiles(context.TODO(), true, true, randomString())
+		Expect(err).To(BeNil())
+
+		profileInfo, ok := profiles[*profile0]
+		Expect(ok).To(BeTrue())
+		Expect(profileInfo.Tier).To(Equal(tier))
+		Expect(profileInfo.Dependencies.Len()).To(Equal(0))
+		Expect(profileInfo.Dependents.Len()).To(Equal(1))
+		Expect(profileInfo.Dependents.Items()).To(ContainElement(*profile1))
+
+		manager.RemoveProfile(profile1)
+		profileInfo, ok = profiles[*profile1]
+		Expect(ok).To(BeFalse())
+
+		profileInfo, ok = profiles[*profile0]
+		Expect(ok).To(BeTrue())
+		Expect(profileInfo.Tier).To(Equal(tier))
+		Expect(profileInfo.Dependencies.Len()).To(Equal(0))
+		Expect(profileInfo.Dependents.Len()).To(Equal(0))
 	})
 })
