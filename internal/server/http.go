@@ -58,7 +58,7 @@ var (
 			return
 		}
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: namespace %q name %q labels %q",
-			filters.Namespace, filters.name, filters.labelSelector))
+			filters.Namespace, filters.Name, filters.labelSelector))
 
 		user, err := validateToken(c)
 		if err != nil {
@@ -113,7 +113,7 @@ var (
 			return
 		}
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: namespace %q name %q labels %q",
-			filters.Namespace, filters.name, filters.labelSelector))
+			filters.Namespace, filters.Name, filters.labelSelector))
 
 		user, err := validateToken(c)
 		if err != nil {
@@ -316,6 +316,59 @@ var (
 			"profiles":       result,
 		})
 	}
+
+	getProfiles = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get managed ClusterProfiles/Profiles")
+
+		filters := getProfileFiltersFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: namespace %q name %q",
+			filters.Namespace, filters.Name))
+
+		user, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		canListClusterProfiles, err := manager.canListClusterProfiles(user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		canListProfiles, err := manager.canListProfiles(user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		profiles, err := manager.GetProfiles(c.Request.Context(), canListClusterProfiles, canListProfiles, user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		profileData := getProfileData(profiles, filters)
+		for k := range profileData {
+			sort.Sort(profileData[k])
+		}
+
+		response := map[int32]ProfileResult{}
+		for k := range profileData {
+			response[k] = ProfileResult{
+				TotalProfiles: len(profileData[k]),
+				Profiles:      profileData[k],
+			}
+		}
+
+		// Return JSON response
+		c.JSON(http.StatusOK, response)
+	}
 )
 
 func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
@@ -334,6 +387,8 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/resources", getDeployedResources)
 	// Return the specified cluster status
 	r.GET("/getClusterStatus", getClusterStatus)
+	// Return existing ClusterProfiles/Profiles
+	r.GET("/profiles", getProfiles)
 
 	errCh := make(chan error)
 
@@ -368,8 +423,8 @@ func getManagedClusterData(clusters map[corev1.ObjectReference]ClusterInfo, filt
 			}
 		}
 
-		if filters.name != "" {
-			if !strings.Contains(k.Name, filters.name) {
+		if filters.Name != "" {
+			if !strings.Contains(k.Name, filters.Name) {
 				continue
 			}
 		}
@@ -388,6 +443,63 @@ func getManagedClusterData(clusters map[corev1.ObjectReference]ClusterInfo, filt
 	}
 
 	return data
+}
+
+// getProfileData groups profiles by tiers. Returns a map of all profiles for a given tier.
+func getProfileData(profiles map[corev1.ObjectReference]ProfileInfo, filters *profileFilters,
+) map[int32]Profiles {
+
+	result := make(map[int32]Profiles)
+
+	for k := range profiles {
+		profile := profiles[k]
+		if filters.Namespace != "" {
+			if !strings.Contains(k.Namespace, filters.Namespace) {
+				continue
+			}
+		}
+
+		if filters.Name != "" {
+			if !strings.Contains(k.Name, filters.Name) {
+				continue
+			}
+		}
+
+		_, ok := result[profile.Tier]
+		if !ok {
+			result[profile.Tier] = make(Profiles, 0)
+		}
+
+		tmpProfile := Profile{
+			Kind:         k.Kind,
+			Namespace:    k.Namespace,
+			Name:         k.Name,
+			Dependencies: make([]corev1.ObjectReference, profile.Dependencies.Len()),
+			Dependents:   make([]corev1.ObjectReference, profile.Dependents.Len()),
+		}
+		dependencies := profile.Dependencies.Items()
+		for j := range dependencies {
+			tmpProfile.Dependencies[j] = corev1.ObjectReference{
+				Kind:       k.Kind,
+				APIVersion: k.APIVersion,
+				Namespace:  dependencies[j].Namespace,
+				Name:       dependencies[j].Name,
+			}
+		}
+		dependents := profile.Dependents.Items()
+		for j := range dependents {
+			tmpProfile.Dependents[j] = corev1.ObjectReference{
+				Kind:       k.Kind,
+				APIVersion: k.APIVersion,
+				Namespace:  dependents[j].Namespace,
+				Name:       dependents[j].Name,
+			}
+		}
+
+		result[profile.Tier] = append(result[profile.Tier], tmpProfile)
+	}
+
+	return result
 }
 
 func getLimitAndSkipFromQuery(c *gin.Context) (limit, skip int) {

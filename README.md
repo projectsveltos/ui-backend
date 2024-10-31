@@ -266,6 +266,66 @@ returns
 }
 ```
 
+### Get profiles
+
+```/profiles```
+
+It is possible to filter by:
+
+. ```namespace=<string>``` => returns only Profiles in a namespace whose name contains the speficied string
+
+. ```name=<string>``` => returns only ClusterProfiles/Profiles whose name contains the speficied string
+
+returns all profiles grouped by tier.
+Each profile contains:
+
+- Kind: kind of the profile (ClusterProfile vs Profile)
+- Namespace: namespace of the profile (empty for ClusterProfiles)
+- Name: name of the profile
+- Dependencies: list of profiles the profile depends on
+- Dependents: list of profiles that depend on this profile
+
+```yaml
+'100':
+  totalProfiles: 4
+  profiles:
+  - kind: ClusterProfile
+    namespace: ''
+    name: deploy-kyverno
+    dependencies: []
+    dependents:
+    - kind: ClusterProfile
+      name: prometheus-grafana
+      apiVersion: config.projectsveltos.io/v1beta1
+  - kind: ClusterProfile
+    namespace: ''
+    name: nginx
+    dependencies: []
+    dependents: []
+  - kind: ClusterProfile
+    namespace: ''
+    name: prometheus-grafana
+    dependencies:
+    - kind: ClusterProfile
+      name: deploy-kyverno
+      apiVersion: config.projectsveltos.io/v1beta1
+    dependents: []
+  - kind: Profile
+    namespace: coke
+    name: deploy-cert-manager
+    dependencies: []
+    dependents: []
+'200':
+  totalProfiles: 1
+  profiles:
+  - kind: ClusterProfile
+    namespace: ''
+    name: external-dns
+    dependencies: []
+    dependents: []
+```
+
+
 ### How to get token
 
 First, create a service account in the desired namespace:

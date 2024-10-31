@@ -138,12 +138,14 @@ func main() {
 	go printMemUsage(ctrl.Log.WithName("memory-usage"))
 
 	startSveltosClusterController(mgr)
+	startClusterSummaryController(mgr)
+	startClusterProfileController(mgr)
+	startProfileController(mgr)
 	//+kubebuilder:scaffold:builder
 
 	setupChecks(mgr)
 
 	go startClusterController(ctx, mgr, setupLog)
-	go startClusterSummaryController(mgr)
 
 	server.InitializeManagerInstance(ctx, mgr.GetConfig(), mgr.GetClient(), scheme,
 		httpPort, ctrl.Log.WithName("gin"))
@@ -246,8 +248,9 @@ func startClusterController(ctx context.Context, mgr ctrl.Manager, logger logr.L
 			} else {
 				setupLog.V(logsettings.LogInfo).Info("CAPI present. Start Cluster controller")
 				if err = (&controller.ClusterReconciler{
-					Client: mgr.GetClient(),
-					Scheme: mgr.GetScheme(),
+					Client:               mgr.GetClient(),
+					Scheme:               mgr.GetScheme(),
+					ConcurrentReconciles: concurrentReconciles,
 				}).SetupWithManager(mgr); err != nil {
 					logger.Error(err, "unable to create controller", "controller", "Cluster")
 					continue
@@ -327,6 +330,40 @@ func startClusterSummaryController(mgr manager.Manager) {
 
 func getClusterSummaryReconciler(mgr manager.Manager) *controller.ClusterSummaryReconciler {
 	return &controller.ClusterSummaryReconciler{
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		ConcurrentReconciles: concurrentReconciles,
+	}
+}
+
+func startClusterProfileController(mgr manager.Manager) {
+	clusterProfileReconciler := getClusterProfileReconciler(mgr)
+	err := clusterProfileReconciler.SetupWithManager(mgr)
+	if err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ClusterProfile")
+		os.Exit(1)
+	}
+}
+
+func getClusterProfileReconciler(mgr manager.Manager) *controller.ClusterProfileReconciler {
+	return &controller.ClusterProfileReconciler{
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		ConcurrentReconciles: concurrentReconciles,
+	}
+}
+
+func startProfileController(mgr manager.Manager) {
+	profileReconciler := getProfileReconciler(mgr)
+	err := profileReconciler.SetupWithManager(mgr)
+	if err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Profile")
+		os.Exit(1)
+	}
+}
+
+func getProfileReconciler(mgr manager.Manager) *controller.ProfileReconciler {
+	return &controller.ProfileReconciler{
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		ConcurrentReconciles: concurrentReconciles,
