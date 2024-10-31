@@ -325,6 +325,28 @@ Each profile contains:
     dependents: []
 ```
 
+### Get a profile instance
+
+```/profile?namespace=<profile namespace>&name=<profile name>&kind<profile kind>```
+
+Kind can either be:
+- ClusterProfile
+- Profile
+
+ClusterProfiles are cluster wide resources. Profiles are namespaced resources. So namespace is *only* required for Profile.
+
+Response contains:
+
+- Kind: kind of the profile (ClusterProfile vs Profile)
+- Namespace: namespace of the profile (empty for ClusterProfiles)
+- Name: name of the profile
+- Dependencies: list of profiles the profile depends on
+- Dependents: list of profiles that depend on this profile
+- Spec: profile's spec
+- MatchingClusters: list of clusters matching this profile. This list contains *only* the clusters users has permission for.
+So if both coke and pepsi clusters are matching a profile, coke admin will only see coke clusters and pepsi admin will only
+see pepsi clusters. Platform admin will see both in the response.
+
 
 ### How to get token
 

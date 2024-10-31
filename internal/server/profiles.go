@@ -19,6 +19,8 @@ package server
 import (
 	"github.com/gin-gonic/gin"
 	corev1 "k8s.io/api/core/v1"
+
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
 
 type Profile struct {
@@ -32,6 +34,10 @@ type Profile struct {
 	Dependencies []corev1.ObjectReference `json:"dependencies"`
 	// List of profiles that depend on this profile
 	Dependents []corev1.ObjectReference `json:"dependents"`
+	// List of managed clusters matching this profile
+	MatchingClusters []corev1.ObjectReference `json:"matchingClusters"`
+	// Profile's Spec section
+	Spec configv1beta1.Spec `json:"spec"`
 }
 
 type Profiles []Profile
@@ -53,6 +59,7 @@ func (s Profiles) Less(i, j int) bool {
 type profileFilters struct {
 	Namespace string `uri:"namespace"`
 	Name      string `uri:"name"`
+	Kind      string `uri:"kind"`
 }
 
 func getProfileFiltersFromQuery(c *gin.Context) *profileFilters {
@@ -60,6 +67,7 @@ func getProfileFiltersFromQuery(c *gin.Context) *profileFilters {
 	// Get the values from query parameters
 	filters.Namespace = c.Query("namespace")
 	filters.Name = c.Query("name")
+	filters.Kind = c.Query("kind")
 
 	return &filters
 }
