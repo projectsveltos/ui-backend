@@ -491,6 +491,13 @@ func (m *instance) RemoveProfile(profile *corev1.ObjectReference) {
 	delete(m.profiles, *profile)
 }
 
+func (m *instance) GetProfile(profile *corev1.ObjectReference) ProfileInfo {
+	m.profileMux.Lock()
+	defer m.profileMux.Unlock()
+
+	return m.profiles[*profile]
+}
+
 // removeProfileDependency removes oldDependency from source's cached dependents
 func (m *instance) removeProfileDependency(source, oldDependency *corev1.ObjectReference) {
 	profileInfo, ok := m.profiles[*source]

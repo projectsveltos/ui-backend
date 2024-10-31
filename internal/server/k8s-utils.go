@@ -22,7 +22,9 @@ import (
 
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationapi "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	authenticationv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	"k8s.io/client-go/rest"
@@ -31,6 +33,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -330,4 +333,56 @@ func (m *instance) canGetProfile(profileNamespace, profileName, user string) (bo
 	}
 
 	return canI.Status.Allowed, nil
+}
+
+func (m *instance) getClusterProfileInstance(ctx context.Context, name string) (*configv1beta1.ClusterProfile, error) {
+	clusterProfile := configv1beta1.ClusterProfile{}
+
+	err := m.client.Get(ctx, types.NamespacedName{Name: name}, &clusterProfile)
+	return &clusterProfile, err
+}
+
+func (m *instance) getProfileInstance(ctx context.Context, namespace, name string) (*configv1beta1.Profile, error) {
+	profile := configv1beta1.Profile{}
+
+	err := m.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &profile)
+	return &profile, err
+}
+
+func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profileRef *corev1.ObjectReference,
+	user string) (*configv1beta1.Spec, []corev1.ObjectReference, error) {
+
+	var spec configv1beta1.Spec
+	var matchingClusters []corev1.ObjectReference
+
+	if profileRef.Kind == configv1beta1.ClusterProfileKind {
+		cp, err := m.getClusterProfileInstance(ctx, profileRef.Name)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		spec = cp.Spec
+		matchingClusters = cp.Status.MatchingClusterRefs
+	} else {
+		p, err := m.getProfileInstance(ctx, profileRef.Namespace, profileRef.Name)
+		if err != nil {
+			return nil, nil, err
+		}
+		spec = p.Spec
+		matchingClusters = p.Status.MatchingClusterRefs
+	}
+
+	accessibleMatchingClusters := make([]corev1.ObjectReference, 0)
+	for i := range matchingClusters {
+		cluster := &matchingClusters[i]
+		canGet, err := m.canGetCluster(cluster.Namespace, cluster.Name, user, clusterproxy.GetClusterType(cluster))
+		if err != nil {
+			return nil, nil, err
+		}
+		if canGet {
+			accessibleMatchingClusters = append(accessibleMatchingClusters, *cluster)
+		}
+	}
+
+	return &spec, accessibleMatchingClusters, nil
 }

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,8 +32,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
 const (
@@ -321,8 +324,8 @@ var (
 		ginLogger.V(logs.LogDebug).Info("get managed ClusterProfiles/Profiles")
 
 		filters := getProfileFiltersFromQuery(c)
-		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: namespace %q name %q",
-			filters.Namespace, filters.Name))
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: kind %q namespace %q name %q",
+			filters.Kind, filters.Namespace, filters.Name))
 
 		user, err := validateToken(c)
 		if err != nil {
@@ -369,6 +372,95 @@ var (
 		// Return JSON response
 		c.JSON(http.StatusOK, response)
 	}
+
+	getProfile = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get a managed ClusterProfile/Profile")
+
+		filters := getProfileFiltersFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: kind %q namespace %q name %q",
+			filters.Kind, filters.Namespace, filters.Name))
+
+		if filters.Kind != configv1beta1.ClusterProfileKind &&
+			filters.Kind != configv1beta1.ProfileKind {
+			msg := fmt.Sprintf("supported kinds are %q and %q",
+				configv1beta1.ClusterProfileKind, configv1beta1.ProfileKind)
+			ginLogger.V(logs.LogInfo).Info(msg)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
+		}
+
+		if filters.Kind == configv1beta1.ProfileKind {
+			if filters.Namespace == "" {
+				msg := fmt.Sprintf("namespace is required for %q", configv1beta1.ProfileKind)
+				ginLogger.V(logs.LogInfo).Info(msg)
+				_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
+			}
+		}
+
+		if filters.Name == "" {
+			msg := "name is required"
+			ginLogger.V(logs.LogInfo).Info(msg)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
+		}
+
+		user, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		var canGetResource bool
+		if filters.Kind == configv1beta1.ClusterProfileKind {
+			canGetResource, err = manager.canGetClusterProfile(filters.Name, user)
+		} else {
+			canGetResource, err = manager.canGetProfile(filters.Namespace, filters.Name, user)
+		}
+
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+		if !canGetResource {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("user does not have permission to access resource. URI: %s", c.Request.URL))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		profileRef := &corev1.ObjectReference{
+			Kind:       filters.Kind,
+			APIVersion: configv1beta1.GroupVersion.String(),
+			Namespace:  filters.Namespace,
+			Name:       filters.Name,
+		}
+
+		profileInfo := manager.GetProfile(profileRef)
+
+		if reflect.DeepEqual(profileInfo, ProfileInfo{}) {
+			c.JSON(http.StatusOK, "")
+		}
+
+		spec, matchingClusters, err := manager.getProfileSpecAndMatchingClusters(c.Request.Context(), profileRef, user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get profile instance. %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		result := Profile{
+			Kind:             profileRef.Kind,
+			Namespace:        profileRef.Namespace,
+			Name:             profileRef.Name,
+			Spec:             *spec,
+			MatchingClusters: matchingClusters,
+			Dependencies:     transformSetToSlice(profileInfo.Dependencies),
+			Dependents:       transformSetToSlice(profileInfo.Dependents),
+		}
+
+		// Return JSON response
+		c.JSON(http.StatusOK, result)
+	}
 )
 
 func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
@@ -389,6 +481,8 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/getClusterStatus", getClusterStatus)
 	// Return existing ClusterProfiles/Profiles
 	r.GET("/profiles", getProfiles)
+	// Return details about a ClusterProfile/Profile
+	r.GET("/profile", getProfile)
 
 	errCh := make(chan error)
 
@@ -453,6 +547,12 @@ func getProfileData(profiles map[corev1.ObjectReference]ProfileInfo, filters *pr
 
 	for k := range profiles {
 		profile := profiles[k]
+		if filters.Kind != "" {
+			if k.Kind != filters.Kind {
+				continue
+			}
+		}
+
 		if filters.Namespace != "" {
 			if !strings.Contains(k.Namespace, filters.Namespace) {
 				continue
@@ -474,29 +574,28 @@ func getProfileData(profiles map[corev1.ObjectReference]ProfileInfo, filters *pr
 			Kind:         k.Kind,
 			Namespace:    k.Namespace,
 			Name:         k.Name,
-			Dependencies: make([]corev1.ObjectReference, profile.Dependencies.Len()),
-			Dependents:   make([]corev1.ObjectReference, profile.Dependents.Len()),
-		}
-		dependencies := profile.Dependencies.Items()
-		for j := range dependencies {
-			tmpProfile.Dependencies[j] = corev1.ObjectReference{
-				Kind:       k.Kind,
-				APIVersion: k.APIVersion,
-				Namespace:  dependencies[j].Namespace,
-				Name:       dependencies[j].Name,
-			}
-		}
-		dependents := profile.Dependents.Items()
-		for j := range dependents {
-			tmpProfile.Dependents[j] = corev1.ObjectReference{
-				Kind:       k.Kind,
-				APIVersion: k.APIVersion,
-				Namespace:  dependents[j].Namespace,
-				Name:       dependents[j].Name,
-			}
+			Dependencies: transformSetToSlice(profile.Dependencies),
+			Dependents:   transformSetToSlice(profile.Dependents),
 		}
 
 		result[profile.Tier] = append(result[profile.Tier], tmpProfile)
+	}
+
+	return result
+}
+
+func transformSetToSlice(set *libsveltosset.Set) []corev1.ObjectReference {
+	result := make([]corev1.ObjectReference, set.Len())
+
+	dependencies := set.Items()
+
+	for j := range dependencies {
+		result[j] = corev1.ObjectReference{
+			Kind:       dependencies[j].Kind,
+			APIVersion: dependencies[j].APIVersion,
+			Namespace:  dependencies[j].Namespace,
+			Name:       dependencies[j].Name,
+		}
 	}
 
 	return result
