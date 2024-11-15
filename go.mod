@@ -8,10 +8,10 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-logr/logr v1.4.2
 	github.com/onsi/ginkgo/v2 v2.21.0
-	github.com/onsi/gomega v1.35.0
+	github.com/onsi/gomega v1.35.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/addon-controller v0.41.1
-	github.com/projectsveltos/libsveltos v0.41.1
+	github.com/projectsveltos/addon-controller v0.42.0
+	github.com/projectsveltos/libsveltos v0.42.0
 	github.com/spf13/pflag v1.0.5
 	k8s.io/api v0.31.2
 	k8s.io/apiextensions-apiserver v0.31.2
@@ -19,7 +19,7 @@ require (
 	k8s.io/client-go v0.31.2
 	k8s.io/component-base v0.31.2
 	k8s.io/klog/v2 v2.130.1
-	sigs.k8s.io/cluster-api v1.8.4
+	sigs.k8s.io/cluster-api v1.8.5
 	sigs.k8s.io/controller-runtime v0.19.1
 )
 
@@ -44,11 +44,11 @@ require (
 	github.com/chai2010/gettext-go v1.0.3 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
-	github.com/containerd/containerd v1.7.21 // indirect
-	github.com/containerd/errdefs v0.1.0 // indirect
+	github.com/containerd/containerd v1.7.23 // indirect
+	github.com/containerd/errdefs v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
-	github.com/cyphar/filepath-securejoin v0.3.3 // indirect
+	github.com/cyphar/filepath-securejoin v0.3.4 // indirect
 	github.com/dariubs/percent v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.6.0 // indirect
@@ -173,10 +173,10 @@ require (
 	golang.org/x/exp v0.0.0-20241004190924-225e2abe05e6 // indirect
 	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
+	golang.org/x/sync v0.9.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/term v0.25.0 // indirect
-	golang.org/x/text v0.19.0 // indirect
+	golang.org/x/text v0.20.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
 	golang.org/x/tools v0.26.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
@@ -188,13 +188,13 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	helm.sh/helm/v3 v3.16.2 // indirect
+	helm.sh/helm/v3 v3.16.3 // indirect
 	k8s.io/apiserver v0.31.2 // indirect
 	k8s.io/cli-runtime v0.31.2 // indirect
 	k8s.io/cluster-bootstrap v0.31.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241009091222-67ed5848f094 // indirect
 	k8s.io/kubectl v0.31.2 // indirect
-	k8s.io/utils v0.0.0-20240921022957-49e7df575cb6 // indirect
+	k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078 // indirect
 	oras.land/oras-go v1.2.6 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
