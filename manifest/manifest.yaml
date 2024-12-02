@@ -54,8 +54,12 @@ rules:
   - config.projectsveltos.io
   resources:
   - clusterconfigurations
+  - clusterprofiles
+  - clusterprofiles/status
   - clustersummaries
   - clustersummaries/status
+  - profiles
+  - profiles/status
   verbs:
   - get
   - list

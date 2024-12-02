@@ -73,7 +73,7 @@ func getClustersInRange(clusters ManagedClusters, limit, skip int) (ManagedClust
 
 type clusterFilters struct {
 	Namespace     string          `uri:"namespace"`
-	name          string          `uri:"name"`
+	Name          string          `uri:"name"`
 	labelSelector labels.Selector `uri:"labels"`
 }
 
@@ -81,7 +81,7 @@ func getClusterFiltersFromQuery(c *gin.Context) (*clusterFilters, error) {
 	var filters clusterFilters
 	// Get the values from query parameters
 	filters.Namespace = c.Query("namespace")
-	filters.name = c.Query("name")
+	filters.Name = c.Query("name")
 	filters.labelSelector = labels.NewSelector()
 
 	lbls := c.Query("labels")

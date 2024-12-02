@@ -12,10 +12,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/ui-backend/internal/server"
-
-	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
 
 type ClusterSummaryReconciler struct {

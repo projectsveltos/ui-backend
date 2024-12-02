@@ -19,16 +19,16 @@ package controller_test
 import (
 	"context"
 
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2/textlogger"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/ui-backend/internal/controller"
@@ -67,7 +67,7 @@ var _ = Describe("SveltosClusterReconciler", func() {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		server.InitializeManagerInstance(ctx, c, scheme, httpPort, logger)
+		server.InitializeManagerInstance(ctx, nil, c, scheme, httpPort, logger)
 
 		reconciler := getSveltosClusterReconciler(c)
 
@@ -89,7 +89,8 @@ var _ = Describe("SveltosClusterReconciler", func() {
 		}
 
 		manager := server.GetManagerInstance()
-		clusters := manager.GetManagedSveltosClusters()
+		clusters, err := manager.GetManagedSveltosClusters(context.TODO(), true, randomString())
+		Expect(err).To(BeNil())
 		_, ok := clusters[*cluster]
 		Expect(ok).To(BeTrue())
 
@@ -101,7 +102,8 @@ var _ = Describe("SveltosClusterReconciler", func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		clusters = manager.GetManagedSveltosClusters()
+		clusters, err = manager.GetManagedSveltosClusters(context.TODO(), true, randomString())
+		Expect(err).To(BeNil())
 		_, ok = clusters[*cluster]
 		Expect(ok).To(BeFalse())
 
