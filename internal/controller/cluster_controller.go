@@ -26,6 +26,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -35,7 +36,8 @@ import (
 // ClusterReconciler reconciles a Cluster object
 type ClusterReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme               *runtime.Scheme
+	ConcurrentReconciles int
 }
 
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;list;watch
@@ -95,5 +97,8 @@ func (r *ClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster, logger l
 func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&clusterv1.Cluster{}).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: r.ConcurrentReconciles,
+		}).
 		Complete(r)
 }

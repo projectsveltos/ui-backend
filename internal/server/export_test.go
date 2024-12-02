@@ -34,7 +34,7 @@ func GetNamespaceFilter(f clusterFilters) string {
 }
 
 func GetNameFilter(f clusterFilters) string {
-	return f.name
+	return f.Name
 }
 
 func GetLabelFilter(f clusterFilters) string {
