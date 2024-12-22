@@ -254,7 +254,7 @@ var _ = Describe("Manager", func() {
 			Labels:         cluster.Labels,
 			Ready:          cluster.Status.ControlPlaneReady,
 			Version:        cluster.Spec.Topology.Version,
-			FailureMessage: cluster.Status.FailureMessage,
+			FailureMessage: server.ExamineClusterConditions(cluster),
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())

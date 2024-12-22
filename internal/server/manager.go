@@ -195,7 +195,7 @@ func (m *instance) GetManagedCAPIClusters(ctx context.Context, canListAll bool, 
 			info := ClusterInfo{
 				Labels:         capiCluster.Labels,
 				Ready:          capiCluster.Status.ControlPlaneReady,
-				FailureMessage: capiCluster.Status.FailureMessage,
+				FailureMessage: examineClusterConditions(capiCluster),
 			}
 
 			capiClusterInfo := getKeyFromObject(m.scheme, capiCluster)
@@ -267,7 +267,7 @@ func (m *instance) AddCAPICluster(cluster *clusterv1.Cluster) {
 	info := ClusterInfo{
 		Labels:         cluster.Labels,
 		Ready:          cluster.Status.ControlPlaneReady,
-		FailureMessage: cluster.Status.FailureMessage,
+		FailureMessage: examineClusterConditions(cluster),
 	}
 	if cluster.Spec.Topology != nil {
 		info.Version = cluster.Spec.Topology.Version
