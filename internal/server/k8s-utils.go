@@ -32,6 +32,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -349,8 +350,11 @@ func (m *instance) getProfileInstance(ctx context.Context, namespace, name strin
 	return &profile, err
 }
 
+// getProfileSpecAndMatchingClusters returns:
+// - profile Spec
+// - list of all matching clusters. For each matching cluster, status of each feature is reported.
 func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profileRef *corev1.ObjectReference,
-	user string) (*configv1beta1.Spec, []corev1.ObjectReference, error) {
+	user string) (*configv1beta1.Spec, []MatchingClusters, error) {
 
 	var spec configv1beta1.Spec
 	var matchingClusters []corev1.ObjectReference
@@ -372,7 +376,7 @@ func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profil
 		matchingClusters = p.Status.MatchingClusterRefs
 	}
 
-	accessibleMatchingClusters := make([]corev1.ObjectReference, 0)
+	accessibleMatchingClusters := make([]MatchingClusters, 0)
 	for i := range matchingClusters {
 		cluster := &matchingClusters[i]
 		canGet, err := m.canGetCluster(cluster.Namespace, cluster.Name, user, clusterproxy.GetClusterType(cluster))
@@ -380,7 +384,25 @@ func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profil
 			return nil, nil, err
 		}
 		if canGet {
-			accessibleMatchingClusters = append(accessibleMatchingClusters, *cluster)
+			clusterSummaryName := controllers.GetClusterSummaryName(profileRef.Kind, profileRef.Name,
+				cluster.Name, cluster.Kind == libsveltosv1beta1.SveltosClusterKind)
+
+			clusterSummaryRef := &corev1.ObjectReference{
+				Namespace:  cluster.Namespace,
+				Name:       clusterSummaryName,
+				Kind:       configv1beta1.ClusterSummaryKind,
+				APIVersion: configv1beta1.GroupVersion.String(),
+			}
+
+			m.clusterStatusesMux.Lock()
+			clusterProfileStatuses := m.clusterSummaryReport[*clusterSummaryRef]
+			m.clusterStatusesMux.Unlock()
+
+			accessibleMatchingClusters = append(accessibleMatchingClusters,
+				MatchingClusters{
+					Cluster:                 *cluster,
+					ClusterFeatureSummaries: clusterProfileStatuses.Summary,
+				})
 		}
 	}
 

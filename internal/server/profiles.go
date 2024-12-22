@@ -23,6 +23,11 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
 
+type MatchingClusters struct {
+	Cluster                 corev1.ObjectReference  `json:"cluster"`
+	ClusterFeatureSummaries []ClusterFeatureSummary `json:"clusterFeatureSummaries"`
+}
+
 type Profile struct {
 	// Kind of the profile (ClusterProfile vs Profile)
 	Kind string `json:"kind"`
@@ -35,7 +40,7 @@ type Profile struct {
 	// List of profiles that depend on this profile
 	Dependents []corev1.ObjectReference `json:"dependents"`
 	// List of managed clusters matching this profile
-	MatchingClusters []corev1.ObjectReference `json:"matchingClusters"`
+	MatchingClusters []MatchingClusters `json:"matchingClusters"`
 	// Profile's Spec section
 	Spec configv1beta1.Spec `json:"spec"`
 }

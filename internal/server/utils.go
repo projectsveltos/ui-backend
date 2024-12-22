@@ -16,29 +16,30 @@ limitations under the License.
 
 package server
 
-var (
-	GetClustersInRange    = getClustersInRange
-	GetHelmReleaseInRange = getHelmReleaseInRange
-	GetResourcesInRange   = getResourcesInRange
+import (
+	"fmt"
 
-	SortResources  = sortResources
-	SortHelmCharts = sortHelmCharts
-
-	ExamineClusterConditions = examineClusterConditions
+	corev1 "k8s.io/api/core/v1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
-var (
-	GetClusterFiltersFromQuery = getClusterFiltersFromQuery
-)
+func examineClusterConditions(cluster *clusterv1.Cluster) *string {
+	if cluster == nil {
+		return nil
+	}
 
-func GetNamespaceFilter(f clusterFilters) string {
-	return f.Namespace
-}
+	message := ""
 
-func GetNameFilter(f clusterFilters) string {
-	return f.Name
-}
+	for i := range cluster.Status.Conditions {
+		c := cluster.Status.Conditions[i]
+		if c.Status == corev1.ConditionFalse {
+			message = fmt.Sprintf("%s\n%s", message, c.Message)
+		}
+	}
 
-func GetLabelFilter(f clusterFilters) string {
-	return f.labelSelector.String()
+	if message != "" {
+		return &message
+	}
+
+	return nil
 }
