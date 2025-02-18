@@ -1,26 +1,26 @@
 module github.com/projectsveltos/ui-backend
 
-go 1.23.5
+go 1.23.6
 
 require (
 	github.com/TwiN/go-color v1.4.1
-	github.com/fluxcd/source-controller/api v1.4.1
+	github.com/fluxcd/source-controller/api v1.5.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-logr/logr v1.4.2
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/addon-controller v0.47.0
-	github.com/projectsveltos/libsveltos v0.47.0
+	github.com/projectsveltos/addon-controller v0.48.0
+	github.com/projectsveltos/libsveltos v0.48.0
 	github.com/spf13/pflag v1.0.6
-	k8s.io/api v0.32.1
-	k8s.io/apiextensions-apiserver v0.32.1
-	k8s.io/apimachinery v0.32.1
-	k8s.io/client-go v0.32.1
-	k8s.io/component-base v0.32.1
+	k8s.io/api v0.32.2
+	k8s.io/apiextensions-apiserver v0.32.2
+	k8s.io/apimachinery v0.32.2
+	k8s.io/client-go v0.32.2
+	k8s.io/component-base v0.32.2
 	k8s.io/klog/v2 v2.130.1
 	sigs.k8s.io/cluster-api v1.9.4
-	sigs.k8s.io/controller-runtime v0.20.1
+	sigs.k8s.io/controller-runtime v0.20.2
 )
 
 require (
@@ -61,12 +61,12 @@ require (
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
 	github.com/evanphx/json-patch v5.9.0+incompatible // indirect
-	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
+	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fluxcd/pkg/apis/acl v0.5.0 // indirect
-	github.com/fluxcd/pkg/apis/meta v1.9.0 // indirect
+	github.com/fluxcd/pkg/apis/acl v0.6.0 // indirect
+	github.com/fluxcd/pkg/apis/meta v1.10.0 // indirect
 	github.com/fluxcd/pkg/http/fetch v0.15.0 // indirect
 	github.com/fluxcd/pkg/tar v0.11.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
@@ -140,7 +140,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
-	github.com/projectsveltos/lua-utils/glua-strings v0.0.0-20250208125623-8a0f9e2ba46b // indirect
+	github.com/projectsveltos/lua-utils/glua-strings v0.0.0-20250215155204-2e8364e9ce73 // indirect
 	github.com/prometheus/client_golang v1.20.5 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.60.0 // indirect
@@ -189,12 +189,12 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	helm.sh/helm/v3 v3.17.0 // indirect
-	k8s.io/apiserver v0.32.1 // indirect
-	k8s.io/cli-runtime v0.32.1 // indirect
+	helm.sh/helm/v3 v3.17.1 // indirect
+	k8s.io/apiserver v0.32.2 // indirect
+	k8s.io/cli-runtime v0.32.2 // indirect
 	k8s.io/cluster-bootstrap v0.32.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20241212222426-2c72e554b1e7 // indirect
-	k8s.io/kubectl v0.32.1 // indirect
+	k8s.io/kubectl v0.32.2 // indirect
 	k8s.io/utils v0.0.0-20241210054802-24370beab758 // indirect
 	oras.land/oras-go v1.2.6 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0 // indirect
