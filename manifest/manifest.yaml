@@ -140,7 +140,7 @@ spec:
         - --v=5
         command:
         - /manager
-        image: projectsveltos/ui-backend:v0.48.1
+        image: projectsveltos/ui-backend:main
         livenessProbe:
           failureThreshold: 3
           httpGet:
