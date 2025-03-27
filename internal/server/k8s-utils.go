@@ -29,7 +29,6 @@ import (
 	authenticationv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	"k8s.io/client-go/rest"
 	certutil "k8s.io/client-go/util/cert"
-	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -359,7 +358,6 @@ func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profil
 
 	var spec configv1beta1.Spec
 	var matchingClusters []corev1.ObjectReference
-	logger := textlogger.NewLogger(textlogger.NewConfig())
 	if profileRef.Kind == configv1beta1.ClusterProfileKind {
 		cp, err := m.getClusterProfileInstance(ctx, profileRef.Name)
 		if err != nil {
@@ -377,18 +375,14 @@ func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profil
 		matchingClusters = p.Status.MatchingClusterRefs
 	}
 
-	logger.V(logs.LogInfo).Info(fmt.Sprintf("MGIANLUC got %d clusters", len(matchingClusters)))
-
 	accessibleMatchingClusters := make([]MatchingClusters, 0)
 	for i := range matchingClusters {
 		cluster := &matchingClusters[i]
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("MGIANLUC consider %s/%s cluster", cluster.Namespace, cluster.Name))
 		canGet, err := m.canGetCluster(cluster.Namespace, cluster.Name, user, clusterproxy.GetClusterType(cluster))
 		if err != nil {
 			return nil, nil, err
 		}
 		if canGet {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("MGIANLUC can get %s/%s cluster", cluster.Namespace, cluster.Name))
 			clusterSummaryName := controllers.GetClusterSummaryName(profileRef.Kind, profileRef.Name,
 				cluster.Name, cluster.Kind == libsveltosv1beta1.SveltosClusterKind)
 
@@ -402,7 +396,6 @@ func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profil
 			m.clusterStatusesMux.Lock()
 			clusterProfileStatuses := m.clusterSummaryReport[*clusterSummaryRef]
 			m.clusterStatusesMux.Unlock()
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("MGIANLUC append %s/%s cluster", cluster.Namespace, cluster.Name))
 			accessibleMatchingClusters = append(accessibleMatchingClusters,
 				MatchingClusters{
 					Cluster:                 *cluster,
