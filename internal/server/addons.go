@@ -234,9 +234,9 @@ func addDeployedChartsForFeature(profileName string, charts []configv1beta1.Char
 
 // getResources returns list of resources deployed in a given cluster
 func getResources(clusterConfiguration *configv1beta1.ClusterConfiguration,
-) map[configv1beta1.Resource][]string {
+) map[libsveltosv1beta1.Resource][]string {
 
-	results := make(map[configv1beta1.Resource][]string)
+	results := make(map[libsveltosv1beta1.Resource][]string)
 
 	for i := range clusterConfiguration.Status.ClusterProfileResources {
 		r := clusterConfiguration.Status.ClusterProfileResources[i]
@@ -251,7 +251,7 @@ func getResources(clusterConfiguration *configv1beta1.ClusterConfiguration,
 }
 
 func addDeployedResources(profilesKind, profileName string,
-	features []configv1beta1.Feature, results map[configv1beta1.Resource][]string) {
+	features []configv1beta1.Feature, results map[libsveltosv1beta1.Resource][]string) {
 
 	for i := range features {
 		addDeployedResourcesForFeature(
@@ -261,7 +261,7 @@ func addDeployedResources(profilesKind, profileName string,
 }
 
 func addDeployedResourcesForFeature(profileName string,
-	resources []configv1beta1.Resource, results map[configv1beta1.Resource][]string) {
+	resources []libsveltosv1beta1.Resource, results map[libsveltosv1beta1.Resource][]string) {
 
 	for i := range resources {
 		resource := &resources[i]

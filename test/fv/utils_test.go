@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -59,7 +59,7 @@ func getClusterProfile(namePrefix string, clusterLabels map[string]string) *conf
 func deleteClusterProfile(clusterProfile *configv1beta1.ClusterProfile) {
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
-			controllers.ClusterProfileLabelName: clusterProfile.Name,
+			clusterops.ClusterProfileLabelName: clusterProfile.Name,
 		},
 	}
 	clusterSummaryList := &configv1beta1.ClusterSummaryList{}

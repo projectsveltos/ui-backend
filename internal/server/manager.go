@@ -52,9 +52,9 @@ type ClusterProfileStatus struct {
 }
 
 type ClusterFeatureSummary struct {
-	FeatureID      configv1beta1.FeatureID     `json:"featureID"`
-	Status         configv1beta1.FeatureStatus `json:"status,omitempty"`
-	FailureMessage *string                     `json:"failureMessage,omitempty"`
+	FeatureID      libsveltosv1beta1.FeatureID     `json:"featureID"`
+	Status         libsveltosv1beta1.FeatureStatus `json:"status,omitempty"`
+	FailureMessage *string                         `json:"failureMessage,omitempty"`
 }
 
 type ProfileInfo struct {

@@ -156,7 +156,7 @@ var _ = Describe("Manager", func() {
 			[]configv1beta1.FeatureSummary{
 				{
 					FeatureID:      "Helm",
-					Status:         configv1beta1.FeatureStatusProvisioning,
+					Status:         libsveltosv1beta1.FeatureStatusProvisioning,
 					FailureMessage: &properClusterSummaryFailureMessage,
 				},
 			},
