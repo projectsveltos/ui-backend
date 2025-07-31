@@ -32,7 +32,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -383,7 +383,7 @@ func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profil
 			return nil, nil, err
 		}
 		if canGet {
-			clusterSummaryName := controllers.GetClusterSummaryName(profileRef.Kind, profileRef.Name,
+			clusterSummaryName := clusterops.GetClusterSummaryName(profileRef.Kind, profileRef.Name,
 				cluster.Name, cluster.Kind == libsveltosv1beta1.SveltosClusterKind)
 
 			clusterSummaryRef := &corev1.ObjectReference{
