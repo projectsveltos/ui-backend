@@ -157,6 +157,9 @@ spec:
         - containerPort: 9440
           name: healthz
           protocol: TCP
+        - containerPort: 8080
+          name: gin
+          protocol: TCP
         readinessProbe:
           failureThreshold: 3
           httpGet:

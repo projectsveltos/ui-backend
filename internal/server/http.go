@@ -466,8 +466,8 @@ var (
 func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	ginLogger = logger
 
-	r := gin.Default()
 	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
 
 	// Return managed ClusterAPI powered clusters
 	r.GET("/capiclusters", getManagedCAPIClusters)
@@ -485,6 +485,8 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/profile", getProfile)
 
 	errCh := make(chan error)
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("Listening and serving HTTP on %s\n", port))
 
 	go func() {
 		err := r.Run(port)
