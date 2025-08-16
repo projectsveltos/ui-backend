@@ -25,7 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-logr/logr"
@@ -469,6 +469,8 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
+	r.Use(gin.Recovery())
+
 	// Return managed ClusterAPI powered clusters
 	r.GET("/capiclusters", getManagedCAPIClusters)
 	// Return SveltosClusters
@@ -484,27 +486,29 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	// Return details about a ClusterProfile/Profile
 	r.GET("/profile", getProfile)
 
-	errCh := make(chan error)
+	const ten = 10
+	srv := &http.Server{
+		Addr:              port,
+		Handler:           r,
+		ReadHeaderTimeout: ten * time.Second,
+	}
 
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("Listening and serving HTTP on %s\n", port))
 
 	go func() {
-		err := r.Run(port)
-		errCh <- err // Send the error on the channel
-		ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("run failed: %v", err))
-		if killErr := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); killErr != nil {
-			panic("kill -TERM failed")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("server failed: %v", err))
 		}
 	}()
 
-	for {
-		select {
-		case <-ctx.Done():
-			ginLogger.V(logs.LogInfo).Info("context canceled")
-			return
-		case <-errCh:
-			return
-		}
+	<-ctx.Done()
+	ginLogger.V(logs.LogInfo).Info("context canceled, shutting down server")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), ten*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("server shutdown failed: %v", err))
 	}
 }
 
