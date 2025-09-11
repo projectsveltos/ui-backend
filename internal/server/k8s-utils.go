@@ -29,7 +29,7 @@ import (
 	authenticationv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	"k8s.io/client-go/rest"
 	certutil "k8s.io/client-go/util/cert"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"

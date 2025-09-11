@@ -40,7 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,7 +54,6 @@ import (
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
-	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/ui-backend/internal/controller"
 	"github.com/projectsveltos/ui-backend/internal/server"
@@ -246,10 +245,10 @@ func startClusterController(ctx context.Context, mgr ctrl.Manager, logger logr.L
 			retries++
 		} else {
 			if !capiPresent {
-				setupLog.V(logsettings.LogInfo).Info("CAPI currently not present. Starting CRD watcher")
+				setupLog.V(logs.LogInfo).Info("CAPI currently not present. Starting CRD watcher")
 				go crd.WatchCustomResourceDefinition(ctx, mgr.GetConfig(), capiCRDHandler, setupLog)
 			} else {
-				setupLog.V(logsettings.LogInfo).Info("CAPI present. Start Cluster controller")
+				setupLog.V(logs.LogInfo).Info("CAPI present. Start Cluster controller")
 				if err = (&controller.ClusterReconciler{
 					Client:               mgr.GetClient(),
 					Scheme:               mgr.GetScheme(),
