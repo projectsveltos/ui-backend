@@ -31,7 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2/textlogger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -55,6 +55,7 @@ func randomPort() string {
 }
 
 func createTestCAPICluster(namespace, name string) *clusterv1.Cluster {
+	initialized := true
 	return &clusterv1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
@@ -65,12 +66,14 @@ func createTestCAPICluster(namespace, name string) *clusterv1.Cluster {
 			},
 		},
 		Spec: clusterv1.ClusterSpec{
-			Topology: &clusterv1.Topology{
+			Topology: clusterv1.Topology{
 				Version: k8sVersion,
 			},
 		},
 		Status: clusterv1.ClusterStatus{
-			ControlPlaneReady: true,
+			Initialization: clusterv1.ClusterInitializationStatus{
+				ControlPlaneInitialized: &initialized,
+			},
 		},
 	}
 }
@@ -252,7 +255,7 @@ var _ = Describe("Manager", func() {
 
 		clusterInfo := server.ClusterInfo{
 			Labels:         cluster.Labels,
-			Ready:          cluster.Status.ControlPlaneReady,
+			Ready:          *cluster.Status.Initialization.ControlPlaneInitialized,
 			Version:        cluster.Spec.Topology.Version,
 			FailureMessage: server.ExamineClusterConditions(cluster),
 		}
