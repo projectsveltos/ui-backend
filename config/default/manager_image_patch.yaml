@@ -8,5 +8,5 @@ spec:
     spec:
       containers:
       # Change the value of image field below to your controller image URL
-      - image: projectsveltos/ui-backend:v1.0.1
+      - image: projectsveltos/ui-backend:main
         name: manager

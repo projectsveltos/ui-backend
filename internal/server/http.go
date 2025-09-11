@@ -31,15 +31,20 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+	"github.com/projectsveltos/ui-backend/internal/mcpclient"
 )
 
 const (
-	maxItems = 6
+	maxItems                 = 6
+	mcpServer                = "http://mcp-server.projectsveltos.svc.cluster.local"
+	namespaceRequiredError   = "namespace is required"
+	clusterNameRequiredError = "cluster name is required"
 )
 
 type Token struct {
@@ -461,6 +466,188 @@ var (
 		// Return JSON response
 		c.JSON(http.StatusOK, result)
 	}
+
+	checkInstallationState = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("check Sveltos installation status")
+
+		_, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		result, err := mcpclient.CheckInstallation(c.Request.Context(), mcpServer, ginLogger)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check installation status: %v", err))
+			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
+	}
+
+	checkProfileDeploymentOnCluster = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("check profile deployment on a given cluster")
+
+		// Get the values from query parameters
+		namespace := c.Query("namespace")
+		profileName := c.Query("profileName")
+		profileKind := c.Query("profileKind")
+		clusterName := c.Query("clusterName")
+		clusterQueryType := c.Query("clusterType")
+
+		var clusterType libsveltosv1beta1.ClusterType
+		if strings.EqualFold(clusterQueryType, string(libsveltosv1beta1.ClusterTypeSveltos)) {
+			clusterType = libsveltosv1beta1.ClusterTypeSveltos
+		} else if strings.EqualFold(clusterQueryType, string(libsveltosv1beta1.ClusterTypeCapi)) {
+			clusterType = libsveltosv1beta1.ClusterTypeCapi
+		}
+
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: namespace %q profile %q:%q cluster %q:%q",
+			namespace, profileKind, profileName, clusterType, clusterName))
+
+		if namespace == "" {
+			ginLogger.V(logs.LogInfo).Info(namespaceRequiredError)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(namespaceRequiredError))
+		}
+
+		if profileKind != configv1beta1.ClusterProfileKind &&
+			profileKind != configv1beta1.ProfileKind {
+			msg := fmt.Sprintf("supported kinds are %q and %q",
+				configv1beta1.ClusterProfileKind, configv1beta1.ProfileKind)
+			ginLogger.V(logs.LogInfo).Info(msg)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
+		}
+
+		if profileName == "" {
+			msg := "profile name is required"
+			ginLogger.V(logs.LogInfo).Info(msg)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
+		}
+
+		if clusterName == "" {
+			ginLogger.V(logs.LogInfo).Info(clusterNameRequiredError)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(clusterNameRequiredError))
+		}
+
+		user, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		canGetCluster, err := manager.canGetCluster(namespace, clusterName, user, clusterType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if !canGetCluster {
+			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this cluster"))
+			return
+		}
+
+		var canGetResource bool
+		if profileKind == configv1beta1.ClusterProfileKind {
+			canGetResource, err = manager.canGetClusterProfile(profileName, user)
+		} else {
+			canGetResource, err = manager.canGetProfile(namespace, profileName, user)
+		}
+
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+		if !canGetResource {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("user does not have permission to access resource. URI: %s", c.Request.URL))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		profileRef := &corev1.ObjectReference{
+			Kind:       profileKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
+			Namespace:  namespace,
+			Name:       profileName,
+		}
+
+		clusterKind := clusterv1.ClusterKind
+		clusterApiVersion := clusterv1.GroupVersion.String()
+		if clusterType == libsveltosv1beta1.ClusterTypeSveltos {
+			clusterApiVersion = libsveltosv1beta1.GroupVersion.String()
+			clusterKind = libsveltosv1beta1.SveltosClusterKind
+		}
+		clusterRef := &corev1.ObjectReference{
+			Kind:       clusterKind,
+			APIVersion: clusterApiVersion,
+			Namespace:  namespace,
+			Name:       clusterName,
+		}
+
+		result, err := mcpclient.CheckProfileDeploymentOnCluster(c.Request.Context(), mcpServer,
+			clusterRef, profileRef, ginLogger)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check profile deployment status: %v", err))
+			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
+	}
+
+	checkClusterDeploymentStatuses = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("check profile deployment errors on a given cluster")
+
+		namespace, name, clusterType := getClusterFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
+
+		user, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		canGetCluster, err := manager.canGetCluster(namespace, name, user, clusterType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if !canGetCluster {
+			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this cluster"))
+			return
+		}
+
+		clusterKind := clusterv1.ClusterKind
+		clusterApiVersion := clusterv1.GroupVersion.String()
+		if clusterType == libsveltosv1beta1.ClusterTypeSveltos {
+			clusterApiVersion = libsveltosv1beta1.GroupVersion.String()
+			clusterKind = libsveltosv1beta1.SveltosClusterKind
+		}
+		clusterRef := &corev1.ObjectReference{
+			Kind:       clusterKind,
+			APIVersion: clusterApiVersion,
+			Namespace:  namespace,
+			Name:       name,
+		}
+
+		result, err := mcpclient.CheckClusterDeploymentStatuses(c.Request.Context(), mcpServer,
+			clusterRef, ginLogger)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check profile deployment errors: %v", err))
+			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
+	}
 )
 
 func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
@@ -485,6 +672,14 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/profiles", getProfiles)
 	// Return details about a ClusterProfile/Profile
 	r.GET("/profile", getProfile)
+
+	// MCP tools
+	// Return details about Sveltos installation
+	r.GET("/installation", checkInstallationState)
+	// Return details about deployment status of a given profile on a given cluster
+	r.GET("/debugProfileCluster", checkProfileDeploymentOnCluster)
+	// Return details about deployment errors on a given cluster
+	r.GET("/debugCluster", checkClusterDeploymentStatuses)
 
 	const ten = 10
 	srv := &http.Server{
