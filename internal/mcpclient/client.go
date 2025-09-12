@@ -133,9 +133,9 @@ func CheckInstallation(ctx context.Context, url string, logger logr.Logger) (str
 
 // DeploymentError represents a single deployment failure for a Sveltos profile.
 type DeploymentError struct {
-	ProfileName string `json:"profileName" jsonschema:"The name of the Sveltos profile that is failing"`
-	ProfileKind string `json:"profileKind" jsonschema:"The profile kind (ClusterProfile vs Profile)"`
-	Cause       string `json:"cause" jsonschema:"The reason for the deployment failure"`
+	ProfileName string   `json:"profileName" jsonschema:"The name of the Sveltos profile that is failing"`
+	ProfileKind string   `json:"profileKind" jsonschema:"The profile kind (ClusterProfile vs Profile)"`
+	Causes      []string `json:"causes" jsonschema:"The reason for the deployment failure"`
 }
 
 func CheckProfileDeploymentOnCluster(ctx context.Context, url string, clusterRef,
@@ -209,16 +209,16 @@ func CheckProfileDeploymentOnCluster(ctx context.Context, url string, clusterRef
 	}
 
 	// Check the boolean field from the unmarshaled struct to get the result.
-	if deploymentResult.Cause == "" {
+	if len(deploymentResult.Causes) == 0 {
 		return fmt.Sprintf("%s %s is properly deployed on Cluster %s %s/%s",
 			profileRef.Kind, profileName,
 			clusterRef.Kind, clusterRef.Namespace, clusterRef.Namespace), nil
 	}
 
-	return fmt.Sprintf("%s %s is not properly deployed on Cluster %s %s/%s. Following errors detected: %s",
+	return fmt.Sprintf("%s %s is not properly deployed on Cluster %s %s/%s. Following errors detected: %v",
 		profileRef.Kind, profileName,
 		clusterRef.Kind, clusterRef.Namespace, clusterRef.Namespace,
-		deploymentResult.Cause), nil
+		deploymentResult.Causes), nil
 }
 
 type DeploymentErrors struct {
@@ -290,9 +290,9 @@ func CheckClusterDeploymentStatuses(ctx context.Context, url string, clusterRef 
 	detectedErrors := ""
 
 	for i := range deploymentResult.Errors {
-		detectedErrors += fmt.Sprintf("%s %s is not properly deployed. Following errors detected: %s",
+		detectedErrors += fmt.Sprintf("%s %s is not properly deployed. Following errors detected: %v",
 			deploymentResult.Errors[i].ProfileKind, deploymentResult.Errors[i].ProfileName,
-			deploymentResult.Errors[i].Cause)
+			deploymentResult.Errors[i].Causes)
 	}
 
 	return detectedErrors, nil
