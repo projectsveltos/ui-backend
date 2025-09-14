@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck // SA1019: We are unable to update the dependency at this time.
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -194,7 +194,7 @@ func (m *instance) GetManagedCAPIClusters(ctx context.Context, canListAll bool, 
 		if ok {
 			info := ClusterInfo{
 				Labels:         capiCluster.Labels,
-				Ready:          capiCluster.Status.ControlPlaneReady,
+				Ready:          derefBoolPtr(capiCluster.Status.Initialization.ControlPlaneInitialized),
 				FailureMessage: examineClusterConditions(capiCluster),
 			}
 
@@ -263,10 +263,18 @@ func (m *instance) RemoveSveltosCluster(sveltosClusterNamespace, sveltosClusterN
 	delete(m.sveltosClusters, *sveltosClusterInfo)
 }
 
+func derefBoolPtr(ptr *bool) bool {
+	if ptr == nil {
+		return false
+	}
+
+	return *ptr
+}
+
 func (m *instance) AddCAPICluster(cluster *clusterv1.Cluster) {
 	info := ClusterInfo{
 		Labels:         cluster.Labels,
-		Ready:          cluster.Status.ControlPlaneReady,
+		Ready:          derefBoolPtr(cluster.Status.Initialization.ControlPlaneInitialized),
 		FailureMessage: examineClusterConditions(cluster),
 	}
 
