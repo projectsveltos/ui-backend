@@ -71,15 +71,15 @@ func connect(ctx context.Context, url string, logger logr.Logger) (*mcp.ClientSe
 
 // SveltosInstallationResult reports the outcome of the Sveltos installation verification.
 type SveltosInstallationResult struct {
-	IsCorrectlyInstalled bool   `json:"is_correctly_installed"`
-	Details              string `json:"details,omitempty"`
+	IsCorrectlyInstalled bool     `json:"is_correctly_installed"`
+	Details              []string `json:"details,omitempty"`
 }
 
-func CheckInstallation(ctx context.Context, url string, logger logr.Logger) (string, error) {
+func CheckInstallation(ctx context.Context, url string, logger logr.Logger) (*SveltosInstallationResult, error) {
 	session, err := connect(ctx, url, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to connect: %v", err))
-		return "", err
+		return nil, err
 	}
 	defer session.Close()
 
@@ -90,20 +90,20 @@ func CheckInstallation(ctx context.Context, url string, logger logr.Logger) (str
 
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to invoked installation_status tool: %v", err))
-		return "", err
+		return nil, err
 	}
 
 	if result.IsError {
 		errorMsg := fmt.Sprintf("MCP installation_status returned error: %v", result.Content)
 		logger.V(logs.LogInfo).Info(errorMsg)
-		return "", errors.New(errorMsg)
+		return nil, errors.New(errorMsg)
 	}
 
 	// Check for structured content. It should contain our result.
 	if result.StructuredContent == nil {
 		errorMsg := noStructureContentError
 		logger.V(logs.LogInfo).Info(errorMsg)
-		return "", errors.New(errorMsg)
+		return nil, errors.New(errorMsg)
 	}
 
 	// Marshal the StructuredContent to JSON and then unmarshal it into our struct.
@@ -112,39 +112,43 @@ func CheckInstallation(ctx context.Context, url string, logger logr.Logger) (str
 	if err != nil {
 		errorMsg := fmt.Sprintf("failed to marshal structured content: %v", err)
 		logger.V(logs.LogInfo).Info(errorMsg)
-		return "", errors.New(errorMsg)
+		return nil, errors.New(errorMsg)
 	}
 
 	var installationResult SveltosInstallationResult
 	err = json.Unmarshal(data, &installationResult)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal structured content: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal structured content: %w", err)
 	}
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("installation_status result: %v", installationResult))
 
 	// Check the boolean field from the unmarshaled struct to get the result.
 	if installationResult.IsCorrectlyInstalled {
-		return "Sveltos installation is correct.", nil
+		logger.V(logs.LogInfo).Info("Sveltos installation is correct.")
+	} else {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("Sveltos installation is incorrect: %v",
+			installationResult.Details))
 	}
 
-	return fmt.Sprintf("Sveltos installation is NOT correct. Details: %s", installationResult.Details), nil
+	return &installationResult, nil
 }
 
 // DeploymentError represents a single deployment failure for a Sveltos profile.
-type DeploymentError struct {
-	ProfileName string   `json:"profileName" jsonschema:"The name of the Sveltos profile that is failing"`
-	ProfileKind string   `json:"profileKind" jsonschema:"The profile kind (ClusterProfile vs Profile)"`
-	Causes      []string `json:"causes" jsonschema:"The reason for the deployment failure"`
+type DeploymentStatus struct {
+	ProfileName   string   `json:"profileName" jsonschema:"The name of the Sveltos profile that is failing"`
+	ProfileKind   string   `json:"profileKind" jsonschema:"The profile kind (ClusterProfile vs Profile)"`
+	IsSuccessfull bool     `json:"isSuccessful" jsonschema:"Indicates if the profile was deployed without any errors."`
+	Causes        []string `json:"causes,omitempty" jsonschema:"The reasons for the deployment failure"`
 }
 
 func CheckProfileDeploymentOnCluster(ctx context.Context, url string, clusterRef,
-	profileRef *corev1.ObjectReference, logger logr.Logger) (string, error) {
+	profileRef *corev1.ObjectReference, logger logr.Logger) (*DeploymentStatus, error) {
 
 	session, err := connect(ctx, url, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to connect: %v", err))
-		return "", err
+		return nil, err
 	}
 	defer session.Close()
 
@@ -170,20 +174,20 @@ func CheckProfileDeploymentOnCluster(ctx context.Context, url string, clusterRef
 
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to invoked analyze_profile_deployment tool: %v", err))
-		return "", err
+		return nil, err
 	}
 
 	if result.IsError {
 		errorMsg := fmt.Sprintf("MCP analyze_profile_deployment returned error: %v", result.Content)
 		logger.V(logs.LogInfo).Info(errorMsg)
-		return "", errors.New(errorMsg)
+		return nil, errors.New(errorMsg)
 	}
 
 	// Check for structured content. It should contain our result.
 	if result.StructuredContent == nil {
 		errorMsg := noStructureContentError
 		logger.V(logs.LogInfo).Info(errorMsg)
-		return "", errors.New(errorMsg)
+		return nil, errors.New(errorMsg)
 	}
 
 	// Marshal the StructuredContent to JSON and then unmarshal it into our struct.
@@ -192,13 +196,13 @@ func CheckProfileDeploymentOnCluster(ctx context.Context, url string, clusterRef
 	if err != nil {
 		errorMsg := fmt.Sprintf("failed to marshal structured content: %v", err)
 		logger.V(logs.LogInfo).Info(errorMsg)
-		return "", errors.New(errorMsg)
+		return nil, errors.New(errorMsg)
 	}
 
-	var deploymentResult DeploymentError
+	var deploymentResult DeploymentStatus
 	err = json.Unmarshal(data, &deploymentResult)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal structured content: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal structured content: %w", err)
 	}
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("analyze_profile_deployment result: %v", deploymentResult))
@@ -210,28 +214,30 @@ func CheckProfileDeploymentOnCluster(ctx context.Context, url string, clusterRef
 
 	// Check the boolean field from the unmarshaled struct to get the result.
 	if len(deploymentResult.Causes) == 0 {
-		return fmt.Sprintf("%s %s is properly deployed on Cluster %s %s/%s",
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("%s %s is properly deployed on Cluster %s %s/%s",
 			profileRef.Kind, profileName,
-			clusterRef.Kind, clusterRef.Namespace, clusterRef.Namespace), nil
+			clusterRef.Kind, clusterRef.Namespace, clusterRef.Namespace))
+	} else {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("%s %s is not properly deployed on Cluster %s %s/%s. Following errors detected: %v",
+			profileRef.Kind, profileName,
+			clusterRef.Kind, clusterRef.Namespace, clusterRef.Namespace,
+			deploymentResult.Causes))
 	}
 
-	return fmt.Sprintf("%s %s is not properly deployed on Cluster %s %s/%s. Following errors detected: %v",
-		profileRef.Kind, profileName,
-		clusterRef.Kind, clusterRef.Namespace, clusterRef.Namespace,
-		deploymentResult.Causes), nil
+	return &deploymentResult, nil
 }
 
-type DeploymentErrors struct {
-	Errors []DeploymentError `json:"deploymentErrors" jsonschema:"List of all resources that are being deployed, failing to deploy or whose deployment has failed"`
+type FailedDeployments struct {
+	FailedProfiles []DeploymentStatus `json:"failedProfiles" jsonschema:"List of all profiles failing to deploy or whose deployment has failed."`
 }
 
 func CheckClusterDeploymentStatuses(ctx context.Context, url string, clusterRef *corev1.ObjectReference,
-	logger logr.Logger) (string, error) {
+	logger logr.Logger) (*FailedDeployments, error) {
 
 	session, err := connect(ctx, url, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to connect: %v", err))
-		return "", err
+		return nil, err
 	}
 	defer session.Close()
 
@@ -249,20 +255,20 @@ func CheckClusterDeploymentStatuses(ctx context.Context, url string, clusterRef 
 
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to invoked list_deployement_errors tool: %v", err))
-		return "", err
+		return nil, err
 	}
 
 	if result.IsError {
 		errorMsg := fmt.Sprintf("MCP list_deployement_errors returned error: %v", result.Content)
 		logger.V(logs.LogInfo).Info(errorMsg)
-		return "", errors.New(errorMsg)
+		return nil, errors.New(errorMsg)
 	}
 
 	// Check for structured content. It should contain our result.
 	if result.StructuredContent == nil {
 		errorMsg := noStructureContentError
 		logger.V(logs.LogInfo).Info(errorMsg)
-		return "", errors.New(errorMsg)
+		return nil, errors.New(errorMsg)
 	}
 
 	// Marshal the StructuredContent to JSON and then unmarshal it into our struct.
@@ -271,29 +277,27 @@ func CheckClusterDeploymentStatuses(ctx context.Context, url string, clusterRef 
 	if err != nil {
 		errorMsg := fmt.Sprintf("failed to marshal structured content: %v", err)
 		logger.V(logs.LogInfo).Info(errorMsg)
-		return "", errors.New(errorMsg)
+		return nil, errors.New(errorMsg)
 	}
 
-	var deploymentResult DeploymentErrors
+	var deploymentResult FailedDeployments
 	err = json.Unmarshal(data, &deploymentResult)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal structured content: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal structured content: %w", err)
 	}
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("analyze_profile_deployment result: %v", deploymentResult))
 
-	if len(deploymentResult.Errors) == 0 {
-		return fmt.Sprintf("all matching profiles are successfully deployed on cluster %s %s/%s",
-			clusterRef.Kind, clusterRef.Namespace, clusterRef.Namespace), nil
+	if len(deploymentResult.FailedProfiles) == 0 {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("all matching profiles are successfully deployed on cluster %s %s/%s",
+			clusterRef.Kind, clusterRef.Namespace, clusterRef.Namespace))
 	}
 
-	detectedErrors := ""
-
-	for i := range deploymentResult.Errors {
-		detectedErrors += fmt.Sprintf("%s %s is not properly deployed. Following errors detected: %v",
-			deploymentResult.Errors[i].ProfileKind, deploymentResult.Errors[i].ProfileName,
-			deploymentResult.Errors[i].Causes)
+	for i := range deploymentResult.FailedProfiles {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("%s %s is not properly deployed. Following errors detected: %v",
+			deploymentResult.FailedProfiles[i].ProfileKind, deploymentResult.FailedProfiles[i].ProfileName,
+			deploymentResult.FailedProfiles[i].Causes))
 	}
 
-	return detectedErrors, nil
+	return &deploymentResult, nil
 }
