@@ -34,26 +34,20 @@ type SveltosClusterPredicate struct {
 
 // Update implements Predicate.
 func (p SveltosClusterPredicate) Update(e event.UpdateEvent) bool {
-	// Check for generation changes first, as that's the primary trigger for spec updates.
 	if p.GenerationChangedPredicate.Update(e) {
 		return true
 	}
 
-	// Now, check for status changes, specifically the Ready field.
-	// It's important to type-assert the objects to the correct type.
 	oldSveltosCluster, ok := e.ObjectOld.(*libsveltosv1beta1.SveltosCluster)
 	if !ok {
-		// If the old object is not a SveltosCluster, we can't compare statuses.
-		return false
+		return true
 	}
 
 	newSveltosCluster, ok := e.ObjectNew.(*libsveltosv1beta1.SveltosCluster)
 	if !ok {
-		// If the new object is not a SveltosCluster, we can't compare statuses.
 		return false
 	}
 
-	// Trigger reconciliation if the Ready status has changed.
 	if oldSveltosCluster.Status.Ready != newSveltosCluster.Status.Ready {
 		return true
 	}
@@ -62,13 +56,10 @@ func (p SveltosClusterPredicate) Update(e event.UpdateEvent) bool {
 		return true
 	}
 
-	// Since FailureMessage is a pointer, you need a nil-safe comparison.
-	// You can use reflect.DeepEqual for a more robust check on the pointers.
 	if !reflect.DeepEqual(oldSveltosCluster.Status.FailureMessage, newSveltosCluster.Status.FailureMessage) {
 		return true
 	}
 
-	// If none of the monitored fields have changed, do not trigger a reconciliation.
 	return false
 }
 
@@ -85,7 +76,6 @@ func (p ClusterStatusPredicate) Update(e event.UpdateEvent) bool {
 		return true
 	}
 
-	// Type-assert the old and new objects to the Cluster type.
 	oldCluster, ok := e.ObjectOld.(*clusterv1.Cluster)
 	if !ok {
 		return false
@@ -95,19 +85,13 @@ func (p ClusterStatusPredicate) Update(e event.UpdateEvent) bool {
 		return false
 	}
 
-	// Compare the conditions. Since the order can change, a DeepEqual is necessary.
-	// The equality of conditions can be checked by comparing the status of the cluster.
-	// NOTE: This check might be too broad and cause excessive reconciles.
-	// A more targeted check might be to look for specific condition types or a change in the overall ready state.
 	if !reflect.DeepEqual(oldCluster.Status.Conditions, newCluster.Status.Conditions) {
 		return true
 	}
 
-	// Compare the Initialization status.
 	if !reflect.DeepEqual(oldCluster.Status.Initialization, newCluster.Status.Initialization) {
 		return true
 	}
 
-	// If none of the monitored fields have changed, do not trigger a reconciliation.
 	return false
 }
