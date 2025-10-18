@@ -32,7 +32,7 @@ func examineClusterConditions(cluster *clusterv1.Cluster) *string {
 
 	for i := range cluster.Status.Conditions {
 		c := cluster.Status.Conditions[i]
-		if c.Status == corev1.ConditionFalse {
+		if c.Status == corev1.ConditionFalse && c.Message != "" {
 			message = fmt.Sprintf("%s\n%s", message, c.Message)
 		}
 	}
