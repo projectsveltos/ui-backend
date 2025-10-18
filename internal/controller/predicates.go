@@ -19,7 +19,9 @@ package controller
 import (
 	"reflect"
 
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -85,11 +87,27 @@ func (p ClusterStatusPredicate) Update(e event.UpdateEvent) bool {
 		return false
 	}
 
-	if !reflect.DeepEqual(oldCluster.Status.Conditions, newCluster.Status.Conditions) {
+	if !conditions.IsTrue(oldCluster, clusterv1.ClusterControlPlaneInitializedCondition) &&
+		conditions.IsTrue(newCluster, clusterv1.ClusterControlPlaneInitializedCondition) {
+
 		return true
 	}
 
-	if !reflect.DeepEqual(oldCluster.Status.Initialization, newCluster.Status.Initialization) {
+	if !ptr.Deref(oldCluster.Status.Initialization.InfrastructureProvisioned, false) &&
+		ptr.Deref(newCluster.Status.Initialization.InfrastructureProvisioned, false) {
+
+		return true
+	}
+
+	if !ptr.Deref(oldCluster.Status.Initialization.ControlPlaneInitialized, false) &&
+		ptr.Deref(newCluster.Status.Initialization.ControlPlaneInitialized, false) {
+
+		return true
+	}
+
+	if oldCluster.Status.Phase != string(clusterv1.ClusterPhaseDeleting) &&
+		newCluster.Status.Phase == string(clusterv1.ClusterPhaseDeleting) {
+
 		return true
 	}
 
