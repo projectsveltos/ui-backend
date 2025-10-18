@@ -19,7 +19,11 @@ package controller
 import (
 	"reflect"
 
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck // SA1019: We are unable to update the dependency at this time.
+
+	//nolint:staticcheck // Compatible with core/v1beta1 Conditions
+	"sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions"
+
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -95,16 +99,19 @@ func (p ClusterStatusPredicate) Update(e event.UpdateEvent) bool {
 		return false
 	}
 
-	// Compare the conditions. Since the order can change, a DeepEqual is necessary.
-	// The equality of conditions can be checked by comparing the status of the cluster.
-	// NOTE: This check might be too broad and cause excessive reconciles.
-	// A more targeted check might be to look for specific condition types or a change in the overall ready state.
-	if !reflect.DeepEqual(oldCluster.Status.Conditions, newCluster.Status.Conditions) {
+	// return true if Cluster.Status.Conditions.ControlPlaneInitialized has changed
+	if !conditions.IsTrue(oldCluster, clusterv1.ControlPlaneInitializedCondition) &&
+		conditions.IsTrue(newCluster, clusterv1.ControlPlaneInitializedCondition) {
+
 		return true
 	}
 
-	// Compare the Initialization status.
-	if !reflect.DeepEqual(oldCluster.Status.Initialization, newCluster.Status.Initialization) {
+	// return true if Cluster.Status.ControlPlaneReady has changed
+	if oldCluster.Status.ControlPlaneReady != newCluster.Status.ControlPlaneReady {
+		return true
+	}
+
+	if oldCluster.Status.InfrastructureReady != newCluster.Status.InfrastructureReady {
 		return true
 	}
 
