@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -97,7 +98,7 @@ type ResourceResult struct {
 }
 
 func (m *instance) getHelmChartsForCluster(ctx context.Context, namespace, name string,
-	clusterType libsveltosv1beta1.ClusterType) ([]HelmRelease, error) {
+	clusterType libsveltosv1beta1.ClusterType, helmFilters *helmFilters) ([]HelmRelease, error) {
 
 	// Even though only one ClusterConfiguration exists for a given cluster,
 	// we are doing a list vs a Get because how to build name of a ClusterConfiguration
@@ -126,11 +127,11 @@ func (m *instance) getHelmChartsForCluster(ctx context.Context, namespace, name 
 
 	// Only one returned
 	cc := &clusterConfigurations.Items[0]
-	return getHelmReleases(cc), nil
+	return getHelmReleases(cc, helmFilters), nil
 }
 
 func (m *instance) getResourcesForCluster(ctx context.Context, namespace, name string,
-	clusterType libsveltosv1beta1.ClusterType) ([]Resource, error) {
+	clusterType libsveltosv1beta1.ClusterType, resourceFilters *resourceFilters) ([]Resource, error) {
 
 	// Even though only one ClusterConfiguration exists for a given cluster,
 	// we are doing a list vs a Get because how to build name of a ClusterConfiguration
@@ -159,7 +160,7 @@ func (m *instance) getResourcesForCluster(ctx context.Context, namespace, name s
 
 	// Only one returned
 	cc := &clusterConfigurations.Items[0]
-	resources := getResources(cc)
+	resources := getResources(cc, resourceFilters)
 
 	result := make([]Resource, len(resources))
 	i := 0
@@ -180,43 +181,56 @@ func (m *instance) getResourcesForCluster(ctx context.Context, namespace, name s
 
 // getHelmReleases returns list of helm releases deployed in a given cluster
 func getHelmReleases(clusterConfiguration *configv1beta1.ClusterConfiguration,
-) []HelmRelease {
+	helmFilters *helmFilters) []HelmRelease {
 
 	results := make([]HelmRelease, 0)
 
 	for i := range clusterConfiguration.Status.ClusterProfileResources {
 		r := clusterConfiguration.Status.ClusterProfileResources[i]
 		results = append(results,
-			addDeployedCharts(configv1beta1.ClusterProfileKind, r.ClusterProfileName, r.Features)...)
+			addDeployedCharts(configv1beta1.ClusterProfileKind, r.ClusterProfileName, helmFilters, r.Features)...)
 	}
 	for i := range clusterConfiguration.Status.ProfileResources {
 		r := clusterConfiguration.Status.ProfileResources[i]
 		results = append(results,
-			addDeployedCharts(configv1beta1.ProfileKind, r.ProfileName, r.Features)...)
+			addDeployedCharts(configv1beta1.ProfileKind, r.ProfileName, helmFilters, r.Features)...)
 	}
 
 	return results
 }
 
-func addDeployedCharts(profileKind, profileName string, features []configv1beta1.Feature,
-) []HelmRelease {
+func addDeployedCharts(profileKind, profileName string, helmFilters *helmFilters,
+	features []configv1beta1.Feature) []HelmRelease {
 
 	results := make([]HelmRelease, 0)
 	for i := range features {
 		results = append(results, addDeployedChartsForFeature(
-			fmt.Sprintf("%s/%s", profileKind, profileName), features[i].Charts)...)
+			fmt.Sprintf("%s/%s", profileKind, profileName), helmFilters, features[i].Charts)...)
 	}
 
 	return results
 }
 
-func addDeployedChartsForFeature(profileName string, charts []configv1beta1.Chart,
-) []HelmRelease {
+func addDeployedChartsForFeature(profileName string, helmFilters *helmFilters,
+	charts []configv1beta1.Chart) []HelmRelease {
 
 	results := make([]HelmRelease, 0)
 
 	for i := range charts {
 		chart := &charts[i]
+
+		if helmFilters != nil && helmFilters.ReleaseName != "" {
+			if !strings.Contains(chart.ReleaseName, helmFilters.ReleaseName) {
+				continue
+			}
+		}
+
+		if helmFilters != nil && helmFilters.ReleaseNamespace != "" {
+			if !strings.Contains(chart.Namespace, helmFilters.ReleaseNamespace) {
+				continue
+			}
+		}
+
 		results = append(results,
 			HelmRelease{
 				RepoURL:         chart.RepoURL,
@@ -234,37 +248,59 @@ func addDeployedChartsForFeature(profileName string, charts []configv1beta1.Char
 
 // getResources returns list of resources deployed in a given cluster
 func getResources(clusterConfiguration *configv1beta1.ClusterConfiguration,
-) map[configv1beta1.DeployedResource][]string {
+	resourceFilters *resourceFilters) map[configv1beta1.DeployedResource][]string {
 
 	results := make(map[configv1beta1.DeployedResource][]string)
 
 	for i := range clusterConfiguration.Status.ClusterProfileResources {
 		r := clusterConfiguration.Status.ClusterProfileResources[i]
-		addDeployedResources(configv1beta1.ClusterProfileKind, r.ClusterProfileName, r.Features, results)
+		addDeployedResources(configv1beta1.ClusterProfileKind, r.ClusterProfileName,
+			resourceFilters, r.Features, results)
 	}
 	for i := range clusterConfiguration.Status.ProfileResources {
 		r := clusterConfiguration.Status.ProfileResources[i]
-		addDeployedResources(configv1beta1.ProfileKind, r.ProfileName, r.Features, results)
+		addDeployedResources(configv1beta1.ProfileKind, r.ProfileName,
+			resourceFilters, r.Features, results)
 	}
 
 	return results
 }
 
 func addDeployedResources(profilesKind, profileName string,
-	features []configv1beta1.Feature, results map[configv1beta1.DeployedResource][]string) {
+	resourceFilters *resourceFilters, features []configv1beta1.Feature,
+	results map[configv1beta1.DeployedResource][]string) {
 
 	for i := range features {
 		addDeployedResourcesForFeature(
 			fmt.Sprintf("%s/%s", profilesKind, profileName),
-			features[i].Resources, results)
+			resourceFilters, features[i].Resources, results)
 	}
 }
 
-func addDeployedResourcesForFeature(profileName string,
+func addDeployedResourcesForFeature(profileName string, resourceFilters *resourceFilters,
 	resources []configv1beta1.DeployedResource, results map[configv1beta1.DeployedResource][]string) {
 
 	for i := range resources {
 		resource := &resources[i]
+
+		if resourceFilters != nil && resourceFilters.Name != "" {
+			if !strings.Contains(resource.Name, resourceFilters.Name) {
+				continue
+			}
+		}
+
+		if resourceFilters != nil && resourceFilters.Namespace != "" {
+			if !strings.Contains(resource.Namespace, resourceFilters.Namespace) {
+				continue
+			}
+		}
+
+		if resourceFilters != nil && resourceFilters.Kind != "" {
+			if !strings.Contains(resource.Kind, resourceFilters.Kind) {
+				continue
+			}
+		}
+
 		if v, ok := results[*resource]; ok {
 			v = append(v, profileName)
 			results[*resource] = v
