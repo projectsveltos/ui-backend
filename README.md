@@ -37,7 +37,7 @@ For instance:
 http://localhost:9000/capiclusters?limit=1&skip=0&namespace=default&labels=env:fv,cluster.x-k8s.io%2Fcluster-name:clusterapi-workload
 ```
 
-returns 
+returns
 
 ```json
 {
@@ -86,7 +86,7 @@ For instance:
 http://localhost:9000/sveltosclusters?limit=1&skip=0&namespace=mgmt&name=mgmt
 ```
 
-returns 
+returns
 
 ```json
 {
@@ -118,6 +118,11 @@ This API supports pagination. Use:
 
 where cluster type can either be __capi__ for ClusterAPI powered clusters or __sveltos__ for SveltosClusters
 
+It is also possible to filter helm charts by:
+
+1. `release_namespace` => filter deployed helm charts by release namespace
+2. `release_name` => filter deployed helm charts by release name
+
 This API supports pagination. Use:
 
 . ```limit=<int>``` to specify the number of helm releases the API will return
@@ -130,7 +135,7 @@ For instance:
 http://localhost:9000/helmcharts?namespace=default&name=clusterapi-workload&type=capi
 ```
 
-returns 
+returns
 
 ```json
 {
@@ -181,6 +186,12 @@ returns
 
 where cluster type can either be __capi__ for ClusterAPI powered clusters or __sveltos__ for SveltosClusters
 
+It is also possible to filter helm charts by:
+
+1. `resource_namespace` => filter deployed resources by namespace
+2. `resource_name` => filter deployed resources by name
+2. `resource_kind` => filter deployed resources by kind
+
 This API supports pagination. Use:
 
 . ```limit=<int>``` to specify the number of Kubernetes resources the API will return
@@ -220,7 +231,7 @@ returns
 }
 ```
 
-### Get Cluster Status 
+### Get Cluster Status
 
 ```/getClusterStatus?namespace=<namespace>&name=<cluster-name>&type=<cluster-type>```
 
@@ -238,7 +249,7 @@ For instance:
 http://localhost:9000/resources?namespace=default&name=clusterapi-workload&type=capi
 ```
 
-returns 
+returns
 
 ```json
 {
@@ -422,7 +433,7 @@ it should print somthing like
 eyJhbGciOiJSUzI1NiIsImtpZCI6IkVsYW8zRU9BMWw3UTZ2QUpjNGFRLXljcTU4M1NhaXBZd1ZNWXJySkVtMTAifQ.eyJhdWQiOlsiaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjLmNsdXN0ZXIubG9jYWwiXSwiZXhwIjoxNzI4NzE3NjA0LCJpYXQiOjE3Mjg2MzEyMDQsImlzcyI6Imh0dHBzOi8va3ViZXJuZXRlcy5kZWZhdWx0LnN2Yy5jbHVzdGVyLmxvY2FsIiwianRpIjoiZmQ1OWU4OTctODZlNS00MDQ4LWEwZjAtMDMxYjM5MjVlYjQwIiwia3ViZXJuZXRlcy5pbyI6eyJuYW1lc3BhY2UiOiJwbGF0Zm9ybSIsInNlcnZpY2VhY2NvdW50Ijp7Im5hbWUiOiJtZ2lhbmx1YyIsInVpZCI6ImJjZWUwZDEwLWM2MTQtNDIzNi1iNmZmLTAyYWU2M2M1MjcxZiJ9fSwibmJmIjoxNzI4NjMxMjA0LCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6cGxhdGZvcm06bWdpYW5sdWMifQ.JlEN38Whyb4mlNsWkC4RAQ82dVUJmWvmdvar7VVxEw2SUgoQthQQPsV-l28bGYpuQspFlsdaO2JRdhm6MGctlMJziweHHm3PNv_RBnFMPRQ01y7ciaRZXE7HEB3sAndvBEQKNWyo4wmmyRnEE2tR79ICQRTLmuWO17MjRIZFChXMHsCsam5OsuE6mE1fj3RSUSbvfRbQwrsTcWOrnYxzquyNVyJyOKxQ97Nm175rez5x9EflHPwueYu5FmNgz3cxMsdkHwkrMnhMqMyNN8WBqKUrju-gPJ9GB-cOcrR_38JyeQBPXYTo9J0tueIWEyaiwKvmPqAsnyHKPT5p-7hFCQ
 ```
 
-## Contributing 
+## Contributing
 
 ❤️ Your contributions are always welcome! If you want to contribute, have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
 
