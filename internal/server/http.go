@@ -173,6 +173,10 @@ var (
 		limit, skip := getLimitAndSkipFromQuery(c)
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
 
+		helmFilters := getHelmFiltersFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("helm filters: namespace %q name %q",
+			helmFilters.ReleaseNamespace, helmFilters.ReleaseName))
+
 		user, err := validateToken(c)
 		if err != nil {
 			_ = c.AbortWithError(http.StatusUnauthorized, err)
@@ -194,7 +198,7 @@ var (
 		}
 
 		helmCharts, err := manager.getHelmChartsForCluster(c.Request.Context(),
-			namespace, name, clusterType)
+			namespace, name, clusterType, helmFilters)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)
@@ -223,10 +227,15 @@ var (
 	getDeployedResources = func(c *gin.Context) {
 		ginLogger.V(logs.LogDebug).Info("get deployed Kubernetes resources")
 
-		limit, skip := getLimitAndSkipFromQuery(c)
 		namespace, name, clusterType := getClusterFromQuery(c)
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
+
+		limit, skip := getLimitAndSkipFromQuery(c)
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
+
+		resourceFilters := getResourceFiltersFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("helm filters: kind: %q namespace %q name %q",
+			resourceFilters.Kind, resourceFilters.Namespace, resourceFilters.Name))
 
 		user, err := validateToken(c)
 		if err != nil {
@@ -249,7 +258,7 @@ var (
 		}
 
 		resources, err := manager.getResourcesForCluster(c.Request.Context(),
-			namespace, name, clusterType)
+			namespace, name, clusterType, resourceFilters)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusBadRequest, err)

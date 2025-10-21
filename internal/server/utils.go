@@ -19,6 +19,7 @@ package server
 import (
 	"fmt"
 
+	"github.com/gin-gonic/gin"
 	corev1 "k8s.io/api/core/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck // SA1019: We are unable to update the dependency at this time.
 )
@@ -42,4 +43,34 @@ func examineClusterConditions(cluster *clusterv1.Cluster) *string {
 	}
 
 	return nil
+}
+
+type helmFilters struct {
+	ReleaseNamespace string `uri:"namespace"`
+	ReleaseName      string `uri:"name"`
+}
+
+func getHelmFiltersFromQuery(c *gin.Context) *helmFilters {
+	var filters helmFilters
+	// Get the values from query parameters
+	filters.ReleaseNamespace = c.Query("release_namespace")
+	filters.ReleaseName = c.Query("release_name")
+
+	return &filters
+}
+
+type resourceFilters struct {
+	Namespace string `uri:"namespace"`
+	Name      string `uri:"name"`
+	Kind      string `uri:"kind"`
+}
+
+func getResourceFiltersFromQuery(c *gin.Context) *resourceFilters {
+	var filters resourceFilters
+	// Get the values from query parameters
+	filters.Namespace = c.Query("resource_namespace")
+	filters.Name = c.Query("resource_name")
+	filters.Kind = c.Query("resource_kind")
+
+	return &filters
 }
