@@ -237,6 +237,11 @@ returns
 
 where cluster type can either be __capi__ for ClusterAPI powered clusters or __sveltos__ for SveltosClusters
 
+It is also possible to filter helm charts by:
+
+1. `profile_name` => filter profiles by name
+2. `profile_kind` => filter profiles by kind
+
 This API supports pagination. Use:
 
 . ```limit=<int>``` to specify the number of Kubernetes resources the API will return
