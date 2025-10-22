@@ -17,6 +17,8 @@ limitations under the License.
 package server
 
 import (
+	"strings"
+
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -30,19 +32,41 @@ func getFlattenedProfileStatusesInRange(flattenedProfileStatuses []ProfileStatus
 	return getSliceInRange(flattenedProfileStatuses, limit, skip)
 }
 
-func flattenProfileStatuses(profileStatuses []ClusterProfileStatus, failedOnly bool) []ProfileStatusResult {
+func flattenProfileStatuses(profileStatuses []ClusterProfileStatus, failedOnly bool,
+	filters *profileFilters) []ProfileStatusResult {
+
 	result := make([]ProfileStatusResult, 0)
 
 	for i := range profileStatuses {
-		result = append(result, flattenProfileStatus(&profileStatuses[i], failedOnly)...)
+		result = append(result, flattenProfileStatus(&profileStatuses[i], failedOnly, filters)...)
 	}
 
 	return result
 }
 
-func flattenProfileStatus(profileStatus *ClusterProfileStatus, failedOnly bool) []ProfileStatusResult {
+func flattenProfileStatus(profileStatus *ClusterProfileStatus, failedOnly bool,
+	filters *profileFilters) []ProfileStatusResult {
+
 	result := make([]ProfileStatusResult, 0)
 	for i := range profileStatus.Summary {
+		if filters != nil && filters.Name != "" {
+			if !strings.Contains(
+				strings.ToLower(profileStatus.ProfileName),
+				strings.ToLower(filters.Name)) {
+
+				continue
+			}
+		}
+
+		if filters != nil && filters.Kind != "" {
+			if !strings.Contains(
+				strings.ToLower(profileStatus.ProfileType),
+				strings.ToLower(filters.Kind)) {
+
+				continue
+			}
+		}
+
 		if !failedOnly || !isCompleted(profileStatus.Summary[i]) {
 			result = append(result,
 				ProfileStatusResult{

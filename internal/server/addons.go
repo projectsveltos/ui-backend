@@ -220,13 +220,19 @@ func addDeployedChartsForFeature(profileName string, helmFilters *helmFilters,
 		chart := &charts[i]
 
 		if helmFilters != nil && helmFilters.ReleaseName != "" {
-			if !strings.Contains(chart.ReleaseName, helmFilters.ReleaseName) {
+			if !strings.Contains(
+				strings.ToLower(chart.ReleaseName),
+				strings.ToLower(helmFilters.ReleaseName)) {
+
 				continue
 			}
 		}
 
 		if helmFilters != nil && helmFilters.ReleaseNamespace != "" {
-			if !strings.Contains(chart.Namespace, helmFilters.ReleaseNamespace) {
+			if !strings.Contains(
+				strings.ToLower(chart.Namespace),
+				strings.ToLower(helmFilters.ReleaseNamespace)) {
+
 				continue
 			}
 		}
@@ -284,19 +290,28 @@ func addDeployedResourcesForFeature(profileName string, resourceFilters *resourc
 		resource := &resources[i]
 
 		if resourceFilters != nil && resourceFilters.Name != "" {
-			if !strings.Contains(resource.Name, resourceFilters.Name) {
+			if !strings.Contains(
+				strings.ToLower(resource.Name),
+				strings.ToLower(resourceFilters.Name)) {
+
 				continue
 			}
 		}
 
 		if resourceFilters != nil && resourceFilters.Namespace != "" {
-			if !strings.Contains(resource.Namespace, resourceFilters.Namespace) {
+			if !strings.Contains(
+				strings.ToLower(resource.Namespace),
+				strings.ToLower(resourceFilters.Namespace)) {
+
 				continue
 			}
 		}
 
 		if resourceFilters != nil && resourceFilters.Kind != "" {
-			if !strings.Contains(resource.Kind, resourceFilters.Kind) {
+			if !strings.Contains(
+				strings.ToLower(resource.Kind),
+				strings.ToLower(resourceFilters.Kind)) {
+
 				continue
 			}
 		}

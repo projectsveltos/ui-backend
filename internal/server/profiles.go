@@ -70,9 +70,9 @@ type profileFilters struct {
 func getProfileFiltersFromQuery(c *gin.Context) *profileFilters {
 	var filters profileFilters
 	// Get the values from query parameters
-	filters.Namespace = c.Query("namespace")
-	filters.Name = c.Query("name")
-	filters.Kind = c.Query("kind")
+	filters.Namespace = c.Query("profile_namespace")
+	filters.Name = c.Query("profile_name")
+	filters.Kind = c.Query("profile_kind")
 
 	return &filters
 }
