@@ -287,12 +287,17 @@ var (
 	getClusterStatus = func(c *gin.Context) {
 		ginLogger.V(logs.LogDebug).Info("get list of profiles (and their status) matching a cluster")
 
-		failedOnly := getFailedOnlyFromQuery(c)
-		limit, skip := getLimitAndSkipFromQuery(c)
 		namespace, name, clusterType := getClusterFromQuery(c)
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
+
+		failedOnly := getFailedOnlyFromQuery(c)
+		limit, skip := getLimitAndSkipFromQuery(c)
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("failed %t", failedOnly))
+
+		filters := getProfileFiltersFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: kind %q namespace %q name %q",
+			filters.Kind, filters.Namespace, filters.Name))
 
 		user, err := validateToken(c)
 		if err != nil {
@@ -316,7 +321,7 @@ var (
 
 		clusterProfileStatuses := manager.GetClusterProfileStatusesByCluster(&namespace, &name, clusterType)
 
-		flattenedProfileStatuses := flattenProfileStatuses(clusterProfileStatuses, failedOnly)
+		flattenedProfileStatuses := flattenProfileStatuses(clusterProfileStatuses, failedOnly, filters)
 		sort.Slice(flattenedProfileStatuses, func(i, j int) bool {
 			return sortClusterProfileStatus(flattenedProfileStatuses, i, j)
 		})
@@ -764,13 +769,19 @@ func getProfileData(profiles map[corev1.ObjectReference]ProfileInfo, filters *pr
 		}
 
 		if filters.Namespace != "" {
-			if !strings.Contains(k.Namespace, filters.Namespace) {
+			if !strings.Contains(
+				strings.ToLower(k.Namespace),
+				strings.ToLower(filters.Namespace)) {
+
 				continue
 			}
 		}
 
 		if filters.Name != "" {
-			if !strings.Contains(k.Name, filters.Name) {
+			if !strings.Contains(
+				strings.ToLower(k.Name),
+				strings.ToLower(filters.Name)) {
+
 				continue
 			}
 		}
