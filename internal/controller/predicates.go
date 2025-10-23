@@ -57,6 +57,10 @@ func (p SveltosClusterPredicate) Update(e event.UpdateEvent) bool {
 		return false
 	}
 
+	if oldSveltosCluster.Spec.Paused != newSveltosCluster.Spec.Paused {
+		return true
+	}
+
 	// Trigger reconciliation if the Ready status has changed.
 	if oldSveltosCluster.Status.Ready != newSveltosCluster.Status.Ready {
 		return true
@@ -115,6 +119,5 @@ func (p ClusterStatusPredicate) Update(e event.UpdateEvent) bool {
 		return true
 	}
 
-	// If none of the monitored fields have changed, do not trigger a reconciliation.
-	return false
+	return oldCluster.Spec.Paused != newCluster.Spec.Paused
 }
