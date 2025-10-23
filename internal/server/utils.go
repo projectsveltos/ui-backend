@@ -17,31 +17,12 @@ limitations under the License.
 package server
 
 import (
-	"fmt"
-
 	"github.com/gin-gonic/gin"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 func examineClusterConditions(cluster *clusterv1.Cluster) *string {
-	if cluster == nil {
-		return nil
-	}
-
-	message := ""
-
-	for i := range cluster.Status.Conditions {
-		c := cluster.Status.Conditions[i]
-		if c.Status != metav1.ConditionTrue && c.Message != "" {
-			message = fmt.Sprintf("%s\n%s", message, c.Message)
-		}
-	}
-
-	if message != "" {
-		return &message
-	}
-
+	// Do not look at CAPI cluster conditions
 	return nil
 }
 

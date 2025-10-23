@@ -50,6 +50,10 @@ func (p SveltosClusterPredicate) Update(e event.UpdateEvent) bool {
 		return false
 	}
 
+	if oldSveltosCluster.Spec.Paused != newSveltosCluster.Spec.Paused {
+		return true
+	}
+
 	if oldSveltosCluster.Status.Ready != newSveltosCluster.Status.Ready {
 		return true
 	}
@@ -111,5 +115,7 @@ func (p ClusterStatusPredicate) Update(e event.UpdateEvent) bool {
 		return true
 	}
 
-	return false
+	oldPaused := ptr.Deref(oldCluster.Spec.Paused, false)
+	newPaused := ptr.Deref(newCluster.Spec.Paused, false)
+	return oldPaused != newPaused
 }
