@@ -39,6 +39,7 @@ type ClusterInfo struct {
 	Labels         map[string]string `json:"labels"`
 	Version        string            `json:"version"`
 	Ready          bool              `json:"ready"`
+	Paused         bool              `json:"paused"`
 	FailureMessage *string           `json:"failureMessage"`
 }
 
@@ -238,6 +239,7 @@ func (m *instance) AddSveltosCluster(sveltosCluster *libsveltosv1beta1.SveltosCl
 		Labels:         sveltosCluster.Labels,
 		Version:        sveltosCluster.Status.Version,
 		Ready:          sveltosCluster.Status.Ready,
+		Paused:         sveltosCluster.Spec.Paused,
 		FailureMessage: sveltosCluster.Status.FailureMessage,
 	}
 
@@ -275,6 +277,7 @@ func (m *instance) AddCAPICluster(cluster *clusterv1.Cluster) {
 	info := ClusterInfo{
 		Labels:         cluster.Labels,
 		Ready:          derefBoolPtr(cluster.Status.Initialization.ControlPlaneInitialized),
+		Paused:         derefBoolPtr(cluster.Spec.Paused),
 		FailureMessage: examineClusterConditions(cluster),
 	}
 
