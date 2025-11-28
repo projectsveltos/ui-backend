@@ -79,6 +79,10 @@ func (r *SveltosClusterReconciler) removeSveltosCluster(sveltosClusterNamespace,
 	logger.V(logs.LogInfo).Info("Reconciling SveltosCluster delete")
 
 	manager := server.GetManagerInstance()
+	if manager == nil {
+		logger.V(logs.LogInfo).Info("Manager not initialized yet, skipping")
+		return
+	}
 
 	manager.RemoveSveltosCluster(sveltosClusterNamespace, sveltosClusterName)
 
@@ -89,6 +93,10 @@ func (r *SveltosClusterReconciler) reconcileNormal(sveltosCluster *libsveltosv1b
 	logger.V(logs.LogInfo).Info("Reconciling SveltosCluster normal")
 
 	manager := server.GetManagerInstance()
+	if manager == nil {
+		logger.V(logs.LogInfo).Info("Manager not initialized yet, skipping")
+		return
+	}
 
 	manager.AddSveltosCluster(sveltosCluster)
 

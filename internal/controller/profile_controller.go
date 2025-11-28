@@ -79,6 +79,10 @@ func (r *ProfileReconciler) removeProfile(profileNamespace, profileName string, 
 	logger.V(logs.LogInfo).Info("Reconciling Profile delete")
 
 	manager := server.GetManagerInstance()
+	if manager == nil {
+		logger.V(logs.LogInfo).Info("Manager not initialized yet, skipping")
+		return
+	}
 
 	profileRef := &corev1.ObjectReference{
 		Kind:       configv1beta1.ProfileKind,
@@ -96,6 +100,10 @@ func (r *ProfileReconciler) reconcileNormal(profile *configv1beta1.Profile, logg
 	logger.V(logs.LogInfo).Info("Reconciling Profile normal")
 
 	manager := server.GetManagerInstance()
+	if manager == nil {
+		logger.V(logs.LogInfo).Info("Manager not initialized yet, skipping")
+		return
+	}
 
 	profileRef := &corev1.ObjectReference{
 		Kind:       configv1beta1.ProfileKind,
