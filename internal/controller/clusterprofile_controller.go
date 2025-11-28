@@ -79,6 +79,10 @@ func (r *ClusterProfileReconciler) removeClusterProfile(clusterProfileName strin
 	logger.V(logs.LogInfo).Info("Reconciling ClusterProfile delete")
 
 	manager := server.GetManagerInstance()
+	if manager == nil {
+		logger.V(logs.LogInfo).Info("Manager not initialized yet, skipping")
+		return
+	}
 
 	profileRef := &corev1.ObjectReference{
 		Kind:       configv1beta1.ClusterProfileKind,
@@ -95,6 +99,10 @@ func (r *ClusterProfileReconciler) reconcileNormal(clusterProfile *configv1beta1
 	logger.V(logs.LogInfo).Info("Reconciling ClusterProfile normal")
 
 	manager := server.GetManagerInstance()
+	if manager == nil {
+		logger.V(logs.LogInfo).Info("Manager not initialized yet, skipping")
+		return
+	}
 
 	profileRef := &corev1.ObjectReference{
 		Kind:       configv1beta1.ClusterProfileKind,

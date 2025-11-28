@@ -78,6 +78,10 @@ func (r *ClusterReconciler) removeCAPICluster(clusterNamespace, clusterName stri
 	logger.V(logs.LogInfo).Info("Reconciling Cluster delete")
 
 	manager := server.GetManagerInstance()
+	if manager == nil {
+		logger.V(logs.LogInfo).Info("Manager not initialized yet, skipping")
+		return
+	}
 
 	manager.RemoveCAPICluster(clusterNamespace, clusterName)
 
@@ -88,6 +92,10 @@ func (r *ClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster, logger l
 	logger.V(logs.LogInfo).Info("Reconciling Cluster normal")
 
 	manager := server.GetManagerInstance()
+	if manager == nil {
+		logger.V(logs.LogInfo).Info("Manager not initialized yet, skipping")
+		return
+	}
 
 	manager.AddCAPICluster(cluster)
 

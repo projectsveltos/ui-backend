@@ -59,6 +59,10 @@ func (r *ClusterSummaryReconciler) removeClusterSummary(clusterSummaryNamespace,
 	logger.V(logs.LogInfo).Info("Reconciling Cluster delete")
 
 	manager := server.GetManagerInstance()
+	if manager == nil {
+		logger.V(logs.LogInfo).Info("Manager not initialized yet, skipping")
+		return
+	}
 
 	manager.RemoveClusterProfileStatus(clusterSummaryNamespace, clusterSummaryName)
 
@@ -69,6 +73,10 @@ func (r *ClusterSummaryReconciler) reconcileNormal(clusterSummary *configv1beta1
 	logger.V(logs.LogInfo).Info("Reconciling new ClusterSummary")
 
 	manager := server.GetManagerInstance()
+	if manager == nil {
+		logger.V(logs.LogInfo).Info("Manager not initialized yet, skipping")
+		return
+	}
 
 	manager.AddClusterProfileStatus(clusterSummary)
 
