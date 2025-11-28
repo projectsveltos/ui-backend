@@ -136,6 +136,9 @@ func main() {
 	debug.SetMemoryLimit(gibibytes_per_bytes)
 	go printMemUsage(ctrl.Log.WithName("memory-usage"))
 
+	server.InitializeManagerInstance(ctx, mgr.GetConfig(), mgr.GetClient(), scheme,
+		httpPort, ctrl.Log.WithName("gin"))
+
 	startSveltosClusterController(mgr)
 	startClusterSummaryController(mgr)
 	startClusterProfileController(mgr)
@@ -145,9 +148,6 @@ func main() {
 	setupChecks(mgr)
 
 	go startClusterController(ctx, mgr, setupLog)
-
-	server.InitializeManagerInstance(ctx, mgr.GetConfig(), mgr.GetClient(), scheme,
-		httpPort, ctrl.Log.WithName("gin"))
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
