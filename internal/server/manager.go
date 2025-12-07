@@ -273,7 +273,9 @@ func (m *instance) AddCAPICluster(cluster *clusterv1.Cluster) {
 		FailureMessage: examineClusterConditions(cluster),
 	}
 
-	info.Version = cluster.Spec.Topology.Version
+	if cluster.Spec.Topology != nil {
+		info.Version = cluster.Spec.Topology.Version
+	}
 
 	clusterInfo := getKeyFromObject(m.scheme, cluster)
 
