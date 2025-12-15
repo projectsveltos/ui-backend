@@ -174,10 +174,10 @@ github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/projectsveltos/addon-controller v1.3.0 h1:qPcmcY5xbqNxy4KfnXkHZjV8CTvSpy24O93tS7Sqowc=
-github.com/projectsveltos/addon-controller v1.3.0/go.mod h1:vMvqrDbK/RoFo27gsvsDJwaMkKVZJLnf/PZEK1zh0Z8=
-github.com/projectsveltos/libsveltos v1.3.0 h1:m0AEG+HqTSkl93Wa9rizedH6nqTwUbrCeBdz4VGloNc=
-github.com/projectsveltos/libsveltos v1.3.0/go.mod h1:At1G0itHPdELlMuQh+v2rLtA/Kji9xMV8K1k0l/sQ1Q=
+github.com/projectsveltos/addon-controller v1.3.1 h1:FaZo6mWem7cAmd2lq/t5icuCRXgzMuHv8X2W+tmQ+P4=
+github.com/projectsveltos/addon-controller v1.3.1/go.mod h1:zc/2+QnzDCmyy1E4d3hrJ18GGSk1ZU6K2hV5PB9IZEc=
+github.com/projectsveltos/libsveltos v1.3.1 h1:uUQ7YRwhWnxxBUjBmf6WJprwSsHJDJAPyHkUmQ+DyXI=
+github.com/projectsveltos/libsveltos v1.3.1/go.mod h1:At1G0itHPdELlMuQh+v2rLtA/Kji9xMV8K1k0l/sQ1Q=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5 h1:khnc+994UszxZYu69J+R5FKiLA/Nk1JQj0EYAkwTWz0=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5/go.mod h1:yVL8KQFa9tmcxgwl9nwIMtKgtmIVC1zaFRSCfOwYvPY=
 github.com/projectsveltos/lua-utils/glua-runes v0.0.0-20251212200258-2b3cdcb7c0f5 h1:YbsebwRwTRhV8QacvEAdFqxcxHdeu7JTVtsBovbkgos=
