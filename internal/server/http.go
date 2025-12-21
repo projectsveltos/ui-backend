@@ -30,7 +30,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -57,6 +60,26 @@ var (
 	getManagedCAPIClusters = func(c *gin.Context) {
 		ginLogger.V(logs.LogDebug).Info("get managed ClusterAPI Clusters")
 
+		manager := GetManagerInstance()
+
+		// Verify if CAPI CRD is deployed
+		clusterCRD := &apiextensionsv1.CustomResourceDefinition{}
+		err := manager.client.Get(c.Request.Context(), types.NamespacedName{Name: "clusters.cluster.x-k8s.io"}, clusterCRD)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				response := ClusterResult{
+					TotalClusters:   0,
+					ManagedClusters: []ManagedCluster{},
+				}
+
+				// Return JSON response
+				c.JSON(http.StatusOK, response)
+			}
+
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
 		limit, skip := getLimitAndSkipFromQuery(c)
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
 		filters, err := getClusterFiltersFromQuery(c)
@@ -73,8 +96,6 @@ var (
 			_ = c.AbortWithError(http.StatusUnauthorized, err)
 			return
 		}
-
-		manager := GetManagerInstance()
 
 		canListAll, err := manager.canListCAPIClusters(user)
 		if err != nil {
