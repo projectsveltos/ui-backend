@@ -25,6 +25,8 @@ var (
 	SortHelmCharts = sortHelmCharts
 
 	ExamineClusterConditions = examineClusterConditions
+
+	GetEventClusterDetails = getEventClusterDetails
 )
 
 var (

@@ -301,3 +301,99 @@ func CheckClusterDeploymentStatuses(ctx context.Context, url string, clusterRef 
 
 	return &deploymentResult, nil
 }
+
+type EventPipelineStatus struct {
+	// Stage 1: Detection
+	ClusterReady                     bool   `json:"clusterReady"`
+	ClusterPaused                    bool   `json:"clusterPaused"`
+	ClusterMatched                   bool   `json:"clusterMatched"`
+	ClusterProvisioned               bool   `json:"clusterProvisioned"`
+	EventSourceName                  string `json:"eventSourceName"`
+	EventSourceFoundInControlCluster bool   `json:"eventSourceFoundInControlCluster"`
+	EventSourceFoundInManagedCluster bool   `json:"eventSourceFoundInManagedCluster"`
+	EventReportFoundInManagedCluster bool   `json:"eventReportFoundInManagedCluster"`
+	EventReportFoundInControlCluster bool   `json:"eventReportFoundInControlCluster"`
+	ResourcesDetected                int    `json:"resourcesDetected"`
+	LastEventReportTime              string `json:"lastEventReportTime,omitempty"`
+
+	// Stage 2: Result
+	InstantiatedProfile string `json:"instantiatedProfile,omitempty"`
+
+	// Issue Reporting: contains all detected issues
+	Issues []string `json:"issues,omitempty"`
+}
+
+func AnalyzeEventPipeline(ctx context.Context, url string, clusterRef *corev1.ObjectReference,
+	eventTriggerName string, logger logr.Logger) ([]string, error) {
+
+	session, err := connect(ctx, url, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to connect: %v", err))
+		return nil, err
+	}
+	defer session.Close()
+
+	input := map[string]interface{}{
+		"clusterRef": map[string]string{
+			"namespace":  clusterRef.Namespace,
+			"name":       clusterRef.Name,
+			"apiVersion": clusterRef.APIVersion,
+			"kind":       clusterRef.Kind,
+		},
+		"eventTriggerName": eventTriggerName,
+	}
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "analyze_event_deployment_pipeline",
+		Arguments: input,
+	})
+
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to invoked analyze_event_deployment_pipeline tool: %v", err))
+		return nil, err
+	}
+
+	if result.IsError {
+		errorMsg := fmt.Sprintf("MCP analyze_event_deployment_pipeline returned error: %v", result.Content)
+		logger.V(logs.LogInfo).Info(errorMsg)
+		return nil, errors.New(errorMsg)
+	}
+
+	// Check for structured content. It should contain our result.
+	if result.StructuredContent == nil {
+		errorMsg := noStructureContentError
+		logger.V(logs.LogInfo).Info(errorMsg)
+		return nil, errors.New(errorMsg)
+	}
+
+	// Marshal the StructuredContent to JSON and then unmarshal it into our struct.
+	// This is a common pattern for converting `any` to a specific type.
+	data, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		errorMsg := fmt.Sprintf("failed to marshal structured content: %v", err)
+		logger.V(logs.LogInfo).Info(errorMsg)
+		return nil, errors.New(errorMsg)
+	}
+
+	// Unmarshal into the status struct
+	var status EventPipelineStatus
+	if err := json.Unmarshal(data, &status); err != nil {
+		errorMsg := fmt.Sprintf("failed to unmarshal result into EventPipelineStatus: %v", err)
+		logger.V(logs.LogInfo).Info(errorMsg)
+		return nil, errors.New(errorMsg)
+	}
+
+	logger.V(logs.LogInfo).Info(fmt.Sprintf("analyze_profile_deployment result: %v", status))
+
+	if len(status.Issues) == 0 {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("eventTrigger %s successfully deployed on cluster %s %s/%s",
+			eventTriggerName, clusterRef.Kind, clusterRef.Namespace, clusterRef.Namespace))
+		return []string{}, nil
+	}
+
+	for i := range status.Issues {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("Issue: %s", status.Issues[i]))
+	}
+
+	return status.Issues, nil
+}

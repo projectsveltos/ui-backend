@@ -33,6 +33,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
+	eventv1beta1 "github.com/projectsveltos/event-manager/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -229,6 +230,36 @@ func (m *instance) canListClusterProfiles(user string) (bool, error) {
 				Group:    configv1beta1.GroupVersion.Group,
 				Version:  configv1beta1.GroupVersion.Version,
 				Resource: configv1beta1.ClusterProfileKind,
+			},
+			User: user,
+		},
+	}
+
+	canI, err := clientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), sar, metav1.CreateOptions{})
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check clientset permissions: %v", err))
+		return false, err
+	}
+
+	return canI.Status.Allowed, nil
+}
+
+// canListEventTriggers verifies whether user has permission to view EventTriggers
+func (m *instance) canListEventTriggers(user string) (bool, error) {
+	// Create a Kubernetes clientset
+	clientset, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clientset: %v", err))
+		return false, err
+	}
+
+	sar := &authorizationapi.SubjectAccessReview{
+		Spec: authorizationapi.SubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationapi.ResourceAttributes{
+				Verb:     "get",
+				Group:    eventv1beta1.GroupVersion.Group,
+				Version:  eventv1beta1.GroupVersion.Version,
+				Resource: eventv1beta1.EventTriggerKind,
 			},
 			User: user,
 		},

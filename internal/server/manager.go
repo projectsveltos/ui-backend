@@ -71,6 +71,12 @@ type ProfileInfo struct {
 	Dependents *libsveltosset.Set `json:"dependents"`
 }
 
+type EventTriggerInfo struct {
+	ClusterSelector libsveltosv1beta1.Selector `json:"clusterSelector"`
+
+	MatchingClusters []corev1.ObjectReference `json:"matchingClusters"`
+}
+
 type instance struct {
 	config             *rest.Config
 	client             client.Client
