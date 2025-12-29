@@ -30,6 +30,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	eventv1beta1 "github.com/projectsveltos/event-manager/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -64,6 +65,9 @@ func setupScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	if err := configv1beta1.AddToScheme(s); err != nil {
+		return nil, err
+	}
+	if err := eventv1beta1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 

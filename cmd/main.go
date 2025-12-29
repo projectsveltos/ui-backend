@@ -88,6 +88,13 @@ const (
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=debuggingconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterconfigurations,verbs=get;list;watch
 
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=eventtriggers,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=eventtriggers/status,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=eventsources,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=eventsources/status,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=eventreports,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=eventreports/status,verbs=get;list;watch
+
 func main() {
 	scheme, err := controller.InitScheme()
 	if err != nil {

@@ -23,6 +23,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	eventv1beta1 "github.com/projectsveltos/event-manager/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -41,6 +42,9 @@ func InitScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	if err := apiextensionsv1.AddToScheme(s); err != nil {
+		return nil, err
+	}
+	if err := eventv1beta1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 

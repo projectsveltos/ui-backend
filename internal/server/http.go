@@ -414,7 +414,7 @@ var (
 	}
 
 	getProfile = func(c *gin.Context) {
-		ginLogger.V(logs.LogDebug).Info("get a managed ClusterProfile/Profile")
+		ginLogger.V(logs.LogDebug).Info("get a ClusterProfile/Profile")
 
 		filters := getProfileFiltersFromQuery(c)
 		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: kind %q namespace %q name %q",
@@ -437,7 +437,7 @@ var (
 		}
 
 		if filters.Name == "" {
-			msg := "name is required"
+			msg := "profile name is required"
 			ginLogger.V(logs.LogInfo).Info(msg)
 			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
 		}
@@ -502,6 +502,137 @@ var (
 		c.JSON(http.StatusOK, result)
 	}
 
+	getEvents = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get managed EventTriggers")
+
+		limit, skip := getLimitAndSkipFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
+
+		filters := getEventFiltersFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: name %q", filters.Name))
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: clusterNamespace %q clusterName %q",
+			filters.ClusterNamespace, filters.ClusterName))
+
+		user, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		canListEventTriggers, err := manager.canListEventTriggers(user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if !canListEventTriggers {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("user does not have permission to access resource. URI: %s", c.Request.URL))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		eventTriggers, err := manager.getEventTriggers(c.Request.Context())
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get eventTriggers %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		eventData := getEventData(eventTriggers, filters)
+		sort.Sort(eventData)
+
+		result, err := getEventsInRange(eventData, limit, skip)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		response := EventResult{
+			TotalEvents:   len(eventData),
+			EventTriggers: result,
+		}
+
+		// Return JSON response
+		c.JSON(http.StatusOK, response)
+	}
+
+	getEvent = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get a EventTrigegr")
+
+		eventTriggerName := c.Query("name")
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: eventTrigger %q",
+			eventTriggerName))
+
+		if eventTriggerName == "" {
+			msg := "eventTrigger name is required"
+			ginLogger.V(logs.LogInfo).Info(msg)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
+		}
+
+		user, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		canListEventTriggers, err := manager.canListEventTriggers(user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if !canListEventTriggers {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("user does not have permission to access resource. URI: %s", c.Request.URL))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		canListAll, err := manager.canListCAPIClusters(user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		capiClusters, err := manager.GetManagedCAPIClusters(c.Request.Context(), canListAll, user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		canListAll, err = manager.canListSveltosClusters(user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		sveltosClusters, err := manager.GetManagedSveltosClusters(c.Request.Context(), canListAll, user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		details, err := manager.GetEventTriggerDetails(c.Request.Context(), eventTriggerName, capiClusters, sveltosClusters, ginLogger)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get eventTrigger details. %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		// Return JSON response
+		c.JSON(http.StatusOK, details)
+	}
+
 	checkInstallationState = func(c *gin.Context) {
 		ginLogger.V(logs.LogDebug).Info("check Sveltos installation status")
 
@@ -555,7 +686,7 @@ var (
 		}
 
 		if profileName == "" {
-			msg := "profile name is required"
+			msg := "name is required"
 			ginLogger.V(logs.LogInfo).Info(msg)
 			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
 		}
@@ -683,6 +814,58 @@ var (
 
 		c.JSON(http.StatusOK, result)
 	}
+
+	analyzeEventPipeline = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("check EventTrigger errors")
+
+		namespace, name, clusterType := getClusterFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
+		eventTriggerName := c.Query("event_name")
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("eventTrigger %s", eventTriggerName))
+
+		user, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		canGetCluster, err := manager.canGetCluster(namespace, name, user, clusterType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if !canGetCluster {
+			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this cluster"))
+			return
+		}
+
+		clusterKind := clusterv1.ClusterKind
+		clusterApiVersion := clusterv1.GroupVersion.String()
+		if clusterType == libsveltosv1beta1.ClusterTypeSveltos {
+			clusterApiVersion = libsveltosv1beta1.GroupVersion.String()
+			clusterKind = libsveltosv1beta1.SveltosClusterKind
+		}
+		clusterRef := &corev1.ObjectReference{
+			Kind:       clusterKind,
+			APIVersion: clusterApiVersion,
+			Namespace:  namespace,
+			Name:       name,
+		}
+
+		result, err := mcpclient.AnalyzeEventPipeline(c.Request.Context(), mcpServer,
+			clusterRef, eventTriggerName, ginLogger)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check profile deployment errors: %v", err))
+			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
+	}
 )
 
 func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
@@ -707,6 +890,10 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/profiles", getProfiles)
 	// Return details about a ClusterProfile/Profile
 	r.GET("/profile", getProfile)
+	// Return existing events
+	r.GET("/events", getEvents)
+	// Return details about a specific EventTrigger
+	r.GET("/event", getEvent)
 
 	// MCP tools
 	// Return details about Sveltos installation
@@ -715,6 +902,8 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/debugProfileCluster", checkProfileDeploymentOnCluster)
 	// Return details about deployment errors on a given cluster
 	r.GET("/debugCluster", checkClusterDeploymentStatuses)
+	// Return details about event errors for a given EventTrigger and Cluster
+	r.GET("/analyzeEventPipeline", analyzeEventPipeline)
 
 	const ten = 10
 	srv := &http.Server{
