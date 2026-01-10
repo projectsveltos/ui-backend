@@ -8,12 +8,12 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-logr/logr v1.4.3
 	github.com/modelcontextprotocol/go-sdk v1.2.0
-	github.com/onsi/ginkgo/v2 v2.27.3
-	github.com/onsi/gomega v1.38.3
+	github.com/onsi/ginkgo/v2 v2.27.4
+	github.com/onsi/gomega v1.39.0
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/addon-controller v1.3.1-0.20260103154745-aaa98e292937
-	github.com/projectsveltos/event-manager v1.3.1-0.20260103162850-6b18e6119fbe
-	github.com/projectsveltos/libsveltos v1.3.2-0.20260103131048-3e231674542f
+	github.com/projectsveltos/addon-controller v1.4.0
+	github.com/projectsveltos/event-manager v1.4.0
+	github.com/projectsveltos/libsveltos v1.4.0
 	github.com/spf13/pflag v1.0.10
 	k8s.io/api v0.35.0
 	k8s.io/apiextensions-apiserver v0.35.0
@@ -21,7 +21,7 @@ require (
 	k8s.io/client-go v0.35.0
 	k8s.io/component-base v0.35.0
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/utils v0.0.0-20251222233032-718f0e51e6d2
+	k8s.io/utils v0.0.0-20260108192941-914a6e750570
 	sigs.k8s.io/cluster-api v1.12.1
 	sigs.k8s.io/controller-runtime v0.22.4
 )
@@ -45,7 +45,7 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fluxcd/pkg/apis/acl v0.9.0 // indirect
-	github.com/fluxcd/pkg/apis/meta v1.23.0 // indirect
+	github.com/fluxcd/pkg/apis/meta v1.24.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
