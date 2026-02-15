@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"sort"
 	"strconv"
@@ -45,13 +46,20 @@ import (
 
 const (
 	maxItems                 = 6
-	mcpServer                = "http://mcp-server.projectsveltos.svc.cluster.local"
 	namespaceRequiredError   = "namespace is required"
 	clusterNameRequiredError = "cluster name is required"
 )
 
 type Token struct {
 	Value string `json:"token,omitempty"`
+}
+
+func getMCPServerURL() string {
+	domain := os.Getenv("KUBERNETES_CLUSTER_DOMAIN")
+	if domain == "" {
+		domain = "cluster.local"
+	}
+	return fmt.Sprintf("http://mcp-server.projectsveltos.svc.%s", domain)
 }
 
 var (
@@ -642,7 +650,7 @@ var (
 			return
 		}
 
-		result, err := mcpclient.CheckInstallation(c.Request.Context(), mcpServer, ginLogger)
+		result, err := mcpclient.CheckInstallation(c.Request.Context(), getMCPServerURL(), ginLogger)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check installation status: %v", err))
 			_ = c.AbortWithError(http.StatusInternalServerError, err)
@@ -754,7 +762,7 @@ var (
 			Name:       clusterName,
 		}
 
-		result, err := mcpclient.CheckProfileDeploymentOnCluster(c.Request.Context(), mcpServer,
+		result, err := mcpclient.CheckProfileDeploymentOnCluster(c.Request.Context(), getMCPServerURL(),
 			clusterRef, profileRef, ginLogger)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check profile deployment status: %v", err))
@@ -804,7 +812,7 @@ var (
 			Name:       name,
 		}
 
-		result, err := mcpclient.CheckClusterDeploymentStatuses(c.Request.Context(), mcpServer,
+		result, err := mcpclient.CheckClusterDeploymentStatuses(c.Request.Context(), getMCPServerURL(),
 			clusterRef, ginLogger)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check profile deployment errors: %v", err))
@@ -856,7 +864,7 @@ var (
 			Name:       name,
 		}
 
-		result, err := mcpclient.AnalyzeEventPipeline(c.Request.Context(), mcpServer,
+		result, err := mcpclient.AnalyzeEventPipeline(c.Request.Context(), getMCPServerURL(),
 			clusterRef, eventTriggerName, ginLogger)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check profile deployment errors: %v", err))
