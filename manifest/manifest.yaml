@@ -146,7 +146,7 @@ spec:
         - --v=5
         command:
         - /manager
-        image: projectsveltos/ui-backend:v1.6.0
+        image: projectsveltos/ui-backend:v1.6.1
         livenessProbe:
           failureThreshold: 3
           httpGet:
