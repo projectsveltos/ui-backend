@@ -27,10 +27,16 @@ var (
 	ExamineClusterConditions = examineClusterConditions
 
 	GetEventClusterDetails = getEventClusterDetails
+
+	GetProfileData = getProfileData
 )
 
 var (
 	GetClusterFiltersFromQuery = getClusterFiltersFromQuery
+)
+
+type (
+	ProfileFilters = profileFilters
 )
 
 func GetNamespaceFilter(f clusterFilters) string {

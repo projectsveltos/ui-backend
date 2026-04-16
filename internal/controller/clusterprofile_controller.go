@@ -119,7 +119,8 @@ func (r *ClusterProfileReconciler) reconcileNormal(clusterProfile *configv1beta1
 		})
 	}
 
-	manager.AddProfile(profileRef, clusterProfile.Spec.ClusterSelector, clusterProfile.Spec.Tier, dependencies)
+	manager.AddProfile(profileRef, clusterProfile.Spec.ClusterSelector, clusterProfile.Spec.Tier,
+		clusterProfile.Spec.SyncMode, dependencies)
 
 	logger.V(logs.LogInfo).Info("Reconcile normal success")
 }

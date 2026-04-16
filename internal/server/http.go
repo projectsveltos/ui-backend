@@ -372,8 +372,8 @@ var (
 		ginLogger.V(logs.LogDebug).Info("get managed ClusterProfiles/Profiles")
 
 		filters := getProfileFiltersFromQuery(c)
-		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: kind %q namespace %q name %q",
-			filters.Kind, filters.Namespace, filters.Name))
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: kind %q namespace %q name %q dryRun: %t",
+			filters.Kind, filters.Namespace, filters.Name, filters.DryRun))
 
 		user, err := validateToken(c)
 		if err != nil {
@@ -823,6 +823,95 @@ var (
 		c.JSON(http.StatusOK, result)
 	}
 
+	getDryRunChanges = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get dryrun changes for profile+cluster")
+
+		// Profile params
+		profileKind := c.Query("profile_kind")
+		profileNamespace := c.Query("profile_namespace")
+		profileName := c.Query("profile_name")
+
+		if profileKind != configv1beta1.ClusterProfileKind &&
+			profileKind != configv1beta1.ProfileKind {
+			msg := fmt.Sprintf("supported profile kinds are %q and %q",
+				configv1beta1.ClusterProfileKind, configv1beta1.ProfileKind)
+			ginLogger.V(logs.LogInfo).Info(msg)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
+			return
+		}
+
+		if profileKind == configv1beta1.ProfileKind && profileNamespace == "" {
+			msg := fmt.Sprintf("profile_namespace is required for kind %q", configv1beta1.ProfileKind)
+			ginLogger.V(logs.LogInfo).Info(msg)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
+			return
+		}
+
+		if profileName == "" {
+			msg := "profile_name is required"
+			ginLogger.V(logs.LogInfo).Info(msg)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
+			return
+		}
+
+		// Cluster params
+		clusterNamespace, clusterName, clusterType := getClusterFromQuery(c)
+		if clusterNamespace == "" || clusterName == "" {
+			return
+		}
+
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf(
+			"dryrun diff: profile %s %s/%s cluster %s:%s/%s",
+			profileKind, profileNamespace, profileName,
+			clusterType, clusterNamespace, clusterName))
+
+		user, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		canGetCluster, err := manager.canGetCluster(clusterNamespace, clusterName, user, clusterType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify cluster permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+		if !canGetCluster {
+			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this cluster"))
+			return
+		}
+
+		var canGetProfile bool
+		if profileKind == configv1beta1.ClusterProfileKind {
+			canGetProfile, err = manager.canGetClusterProfile(profileName, user)
+		} else {
+			canGetProfile, err = manager.canGetProfile(profileNamespace, profileName, user)
+		}
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify profile permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+		if !canGetProfile {
+			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this profile"))
+			return
+		}
+
+		result, err := manager.getDryRunChanges(c.Request.Context(),
+			profileKind, profileNamespace, profileName,
+			clusterNamespace, clusterName, clusterType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get dryrun changes: %v", err))
+			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
+	}
+
 	analyzeEventPipeline = func(c *gin.Context) {
 		ginLogger.V(logs.LogDebug).Info("check EventTrigger errors")
 
@@ -912,6 +1001,8 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/debugCluster", checkClusterDeploymentStatuses)
 	// Return details about event errors for a given EventTrigger and Cluster
 	r.GET("/analyzeEventPipeline", analyzeEventPipeline)
+	// Return dryrun diff for a given profile+cluster pair
+	r.GET("/dryRunChanges", getDryRunChanges)
 
 	const ten = 10
 	srv := &http.Server{
@@ -1000,6 +1091,13 @@ func getProfileData(profiles map[corev1.ObjectReference]ProfileInfo, filters *pr
 				strings.ToLower(k.Name),
 				strings.ToLower(filters.Name)) {
 
+				continue
+			}
+		}
+
+		// If DryRun filter is requested, only include profiles in DryRun mode.
+		if filters.DryRun {
+			if profile.SyncMode != configv1beta1.SyncModeDryRun {
 				continue
 			}
 		}

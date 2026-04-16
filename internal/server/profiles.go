@@ -17,6 +17,8 @@ limitations under the License.
 package server
 
 import (
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	corev1 "k8s.io/api/core/v1"
 
@@ -65,6 +67,7 @@ type profileFilters struct {
 	Namespace string `uri:"namespace"`
 	Name      string `uri:"name"`
 	Kind      string `uri:"kind"`
+	DryRun    bool   `uri:"dryrun"`
 }
 
 func getProfileFiltersFromQuery(c *gin.Context) *profileFilters {
@@ -73,6 +76,9 @@ func getProfileFiltersFromQuery(c *gin.Context) *profileFilters {
 	filters.Namespace = c.Query("profile_namespace")
 	filters.Name = c.Query("profile_name")
 	filters.Kind = c.Query("profile_kind")
+
+	dryRunValue, _ := strconv.ParseBool(c.Query("dryrun"))
+	filters.DryRun = dryRunValue
 
 	return &filters
 }
