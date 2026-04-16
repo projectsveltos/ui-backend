@@ -427,7 +427,8 @@ var _ = Describe("Manager", func() {
 
 		// test it has been added
 		tier := int32(10)
-		manager.AddProfile(profile0, libsveltosv1beta1.Selector{}, tier, nil)
+		manager.AddProfile(profile0, libsveltosv1beta1.Selector{}, tier,
+			configv1beta1.SyncModeContinuous, nil)
 
 		profiles, err := manager.GetProfiles(context.TODO(), true, true, randomString())
 		Expect(err).To(BeNil())
@@ -450,7 +451,8 @@ var _ = Describe("Manager", func() {
 		// Make profile1 depend on profile
 		dependecies.Insert(profile0) // profile1 depends on profile0
 
-		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier, dependecies)
+		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier,
+			configv1beta1.SyncModeContinuous, dependecies)
 
 		profiles, err = manager.GetProfiles(context.TODO(), true, true, randomString())
 		Expect(err).To(BeNil())
@@ -470,7 +472,8 @@ var _ = Describe("Manager", func() {
 		Expect(profileInfo.Dependents.Len()).To(Equal(0))
 
 		// Remove profile1 dependency on profile0
-		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier, nil)
+		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier,
+			configv1beta1.SyncModeContinuous, nil)
 
 		profiles, err = manager.GetProfiles(context.TODO(), true, true, randomString())
 		Expect(err).To(BeNil())
@@ -506,7 +509,8 @@ var _ = Describe("Manager", func() {
 
 		// test it has been added
 		tier := int32(10)
-		manager.AddProfile(profile0, libsveltosv1beta1.Selector{}, tier, nil)
+		manager.AddProfile(profile0, libsveltosv1beta1.Selector{}, tier,
+			configv1beta1.SyncModeContinuous, nil)
 
 		profile1 := &corev1.ObjectReference{
 			Namespace:  namespace,
@@ -517,7 +521,8 @@ var _ = Describe("Manager", func() {
 		dependecies := &libsveltosset.Set{}
 		// Make profile1 depend on profile0
 		dependecies.Insert(profile0) // profile1 depends on profile0
-		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier, dependecies)
+		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier,
+			configv1beta1.SyncModeContinuous, dependecies)
 
 		profile2 := &corev1.ObjectReference{
 			Namespace:  namespace,
@@ -528,7 +533,8 @@ var _ = Describe("Manager", func() {
 		dependecies = &libsveltosset.Set{}
 		// Make profile2 depend on profile1
 		dependecies.Insert(profile1) // profile2 depends on profile1
-		manager.AddProfile(profile2, libsveltosv1beta1.Selector{}, tier, dependecies)
+		manager.AddProfile(profile2, libsveltosv1beta1.Selector{}, tier,
+			configv1beta1.SyncModeContinuous, dependecies)
 
 		profiles, err := manager.GetProfiles(context.TODO(), true, true, randomString())
 		Expect(err).To(BeNil())
@@ -573,7 +579,8 @@ var _ = Describe("Manager", func() {
 
 		// test it has been added
 		tier := int32(10)
-		manager.AddProfile(profile0, libsveltosv1beta1.Selector{}, tier, nil)
+		manager.AddProfile(profile0, libsveltosv1beta1.Selector{}, tier,
+			configv1beta1.SyncModeContinuous, nil)
 
 		profile1 := &corev1.ObjectReference{
 			Namespace:  namespace,
@@ -584,7 +591,8 @@ var _ = Describe("Manager", func() {
 		dependecies := &libsveltosset.Set{}
 		// Make profile1 depend on profile0
 		dependecies.Insert(profile0) // profile1 depends on profile0
-		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier, dependecies)
+		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier,
+			configv1beta1.SyncModeContinuous, dependecies)
 
 		profiles, err := manager.GetProfiles(context.TODO(), true, true, randomString())
 		Expect(err).To(BeNil())
@@ -605,5 +613,53 @@ var _ = Describe("Manager", func() {
 		Expect(profileInfo.Tier).To(Equal(tier))
 		Expect(profileInfo.Dependencies.Len()).To(Equal(0))
 		Expect(profileInfo.Dependents.Len()).To(Equal(0))
+	})
+
+	It("GetProfileData filter by syncMode set to DryRun", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		namespace := randomString()
+
+		profile0 := &corev1.ObjectReference{
+			Namespace:  namespace,
+			Name:       randomString(),
+			Kind:       configv1beta1.ProfileKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
+		}
+
+		// test it has been added
+		tier := int32(10)
+		manager.AddProfile(profile0, libsveltosv1beta1.Selector{}, tier,
+			configv1beta1.SyncModeContinuous, nil)
+
+		profile1 := &corev1.ObjectReference{
+			Namespace:  namespace,
+			Name:       randomString(),
+			Kind:       configv1beta1.ProfileKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
+		}
+
+		manager.AddProfile(profile1, libsveltosv1beta1.Selector{}, tier,
+			configv1beta1.SyncModeDryRun, nil)
+
+		profiles, err := manager.GetProfiles(context.TODO(), true, true, randomString())
+		Expect(err).To(BeNil())
+
+		_, ok := profiles[*profile0]
+		Expect(ok).To(BeTrue())
+		_, ok = profiles[*profile1]
+		Expect(ok).To(BeTrue())
+
+		filters := &server.ProfileFilters{
+			DryRun: true,
+		}
+
+		result := server.GetProfileData(profiles, filters)
+		Expect(len(result)).To(Equal(1))
+		Expect(result[tier][0].Name).To(Equal(profile1.Name))
+		Expect(result[tier][0].Namespace).To(Equal(profile1.Namespace))
 	})
 })

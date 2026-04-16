@@ -39,6 +39,7 @@ rules:
   - clusterconfigurations
   - clusterprofiles
   - clusterprofiles/status
+  - clusterreports
   - clustersummaries
   - clustersummaries/status
   - profiles
