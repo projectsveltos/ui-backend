@@ -40,6 +40,7 @@ type ClusterInfo struct {
 	Version        string            `json:"version"`
 	Ready          bool              `json:"ready"`
 	Paused         bool              `json:"paused"`
+	PullMode       bool              `json:"pullMode"`
 	FailureMessage *string           `json:"failureMessage"`
 }
 
@@ -163,6 +164,8 @@ func (m *instance) GetManagedSveltosClusters(ctx context.Context, canListAll boo
 			info := ClusterInfo{
 				Labels:         sc.Labels,
 				Version:        sc.Status.Version,
+				Paused:         sc.Spec.Paused,
+				PullMode:       sc.Spec.PullMode,
 				Ready:          sc.Status.Ready,
 				FailureMessage: sc.Status.FailureMessage,
 			}
@@ -206,6 +209,8 @@ func (m *instance) GetManagedCAPIClusters(ctx context.Context, canListAll bool, 
 				Labels:         capiCluster.Labels,
 				Ready:          derefBoolPtr(capiCluster.Status.Initialization.ControlPlaneInitialized),
 				FailureMessage: examineClusterConditions(capiCluster),
+				PullMode:       false,
+				Paused:         derefBoolPtr(capiCluster.Spec.Paused),
 			}
 
 			capiClusterInfo := getKeyFromObject(m.scheme, capiCluster)
@@ -249,6 +254,7 @@ func (m *instance) AddSveltosCluster(sveltosCluster *libsveltosv1beta1.SveltosCl
 		Version:        sveltosCluster.Status.Version,
 		Ready:          sveltosCluster.Status.Ready,
 		Paused:         sveltosCluster.Spec.Paused,
+		PullMode:       sveltosCluster.Spec.PullMode,
 		FailureMessage: sveltosCluster.Status.FailureMessage,
 	}
 
@@ -287,6 +293,7 @@ func (m *instance) AddCAPICluster(cluster *clusterv1.Cluster) {
 		Labels:         cluster.Labels,
 		Ready:          derefBoolPtr(cluster.Status.Initialization.ControlPlaneInitialized),
 		Paused:         derefBoolPtr(cluster.Spec.Paused),
+		PullMode:       false,
 		FailureMessage: examineClusterConditions(cluster),
 	}
 
