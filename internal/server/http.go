@@ -1004,6 +1004,13 @@ func getProfileData(profiles map[corev1.ObjectReference]ProfileInfo, filters *pr
 			}
 		}
 
+		// If DryRun filter is requested, only include profiles in DryRun mode.
+		if filters.DryRun {
+			if profile.SyncMode != configv1beta1.SyncModeDryRun {
+				continue
+			}
+		}
+
 		_, ok := result[profile.Tier]
 		if !ok {
 			result[profile.Tier] = make(Profiles, 0)

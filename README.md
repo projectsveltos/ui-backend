@@ -292,6 +292,8 @@ It is possible to filter by:
 
 . ```name=<string>``` => returns only ClusterProfiles/Profiles whose name contains the speficied string
 
+. ```dryrun``` => returns only ClusterProfiles/Profiles with syncMode set to DryRun
+
 returns all profiles grouped by tier.
 Each profile contains:
 

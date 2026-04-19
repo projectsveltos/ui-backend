@@ -40,6 +40,7 @@ type ClusterInfo struct {
 	Version        string            `json:"version"`
 	Ready          bool              `json:"ready"`
 	Paused         bool              `json:"paused"`
+	PullMode       bool              `json:"pullMode"`
 	FailureMessage *string           `json:"failureMessage"`
 }
 
@@ -69,6 +70,9 @@ type ProfileInfo struct {
 
 	// Dependents is the list of ClusterProfile/Profile dependent's names
 	Dependents *libsveltosset.Set `json:"dependents"`
+
+	// SyncMode specifies how features are synced in a matching workload cluster.
+	SyncMode configv1beta1.SyncMode `json:"syncMode"`
 }
 
 type EventTriggerInfo struct {
@@ -160,6 +164,8 @@ func (m *instance) GetManagedSveltosClusters(ctx context.Context, canListAll boo
 			info := ClusterInfo{
 				Labels:         sc.Labels,
 				Version:        sc.Status.Version,
+				Paused:         sc.Spec.Paused,
+				PullMode:       sc.Spec.PullMode,
 				Ready:          sc.Status.Ready,
 				FailureMessage: sc.Status.FailureMessage,
 			}
@@ -203,6 +209,8 @@ func (m *instance) GetManagedCAPIClusters(ctx context.Context, canListAll bool, 
 				Labels:         capiCluster.Labels,
 				Ready:          derefBoolPtr(capiCluster.Status.Initialization.ControlPlaneInitialized),
 				FailureMessage: examineClusterConditions(capiCluster),
+				PullMode:       false,
+				Paused:         derefBoolPtr(capiCluster.Spec.Paused),
 			}
 
 			capiClusterInfo := getKeyFromObject(m.scheme, capiCluster)
@@ -246,6 +254,7 @@ func (m *instance) AddSveltosCluster(sveltosCluster *libsveltosv1beta1.SveltosCl
 		Version:        sveltosCluster.Status.Version,
 		Ready:          sveltosCluster.Status.Ready,
 		Paused:         sveltosCluster.Spec.Paused,
+		PullMode:       sveltosCluster.Spec.PullMode,
 		FailureMessage: sveltosCluster.Status.FailureMessage,
 	}
 
@@ -284,6 +293,7 @@ func (m *instance) AddCAPICluster(cluster *clusterv1.Cluster) {
 		Labels:         cluster.Labels,
 		Ready:          derefBoolPtr(cluster.Status.Initialization.ControlPlaneInitialized),
 		Paused:         derefBoolPtr(cluster.Spec.Paused),
+		PullMode:       false,
 		FailureMessage: examineClusterConditions(cluster),
 	}
 
@@ -459,7 +469,7 @@ func (m *instance) GetProfiles(ctx context.Context, canListClusterProfiles, canL
 }
 
 func (m *instance) AddProfile(profile *corev1.ObjectReference, selector libsveltosv1beta1.Selector,
-	tier int32, dependencies *libsveltosset.Set) {
+	tier int32, syncMode configv1beta1.SyncMode, dependencies *libsveltosset.Set) {
 
 	if dependencies == nil {
 		dependencies = &libsveltosset.Set{}
@@ -487,6 +497,7 @@ func (m *instance) AddProfile(profile *corev1.ObjectReference, selector libsvelt
 		ClusterSelector: selector,
 		Dependencies:    dependencies,
 		Dependents:      profileInfo.Dependents,
+		SyncMode:        syncMode,
 	}
 }
 
