@@ -77,7 +77,7 @@ func getProfileFiltersFromQuery(c *gin.Context) *profileFilters {
 	filters.Name = c.Query("profile_name")
 	filters.Kind = c.Query("profile_kind")
 
-	dryRunValue, _ := strconv.ParseBool(c.Query("dryrun"))
+	dryRunValue, _ := strconv.ParseBool(c.Query("dryRun"))
 	filters.DryRun = dryRunValue
 
 	return &filters
