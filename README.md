@@ -1,9 +1,20 @@
 [![CI](https://github.com/projectsveltos/ui-backend/actions/workflows/main.yaml/badge.svg)](https://github.com/projectsveltos/ui-backend/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/projectsveltos/ui-backend)](https://goreportcard.com/report/github.com/projectsveltos/ui-backend)
 [![Release](https://img.shields.io/github/v/release/projectsveltos/ui-backend)](https://github.com/projectsveltos/ui-backend/releases)
-[![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q)
 [![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)
-[![Twitter Follow](https://img.shields.io/twitter/follow/projectsveltos?style=social)](https://twitter.com/projectsveltos)
+[![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q)
+[![LinkedIn](https://custom-icon-badges.demolab.com/badge/LinkedIn-0A66C2?logo=linkedin-white&logoColor=fff)](https://www.linkedin.com/company/projectsveltos/)
+[![X URL](https://img.shields.io/twitter/url/https/twitter.com/projectsveltos.svg?style=social&label=Follow%20%40projectsveltos)](https://x.com/projectsveltos)
+
+👋 Welcome to **Projectsveltos**!
+
+<div align="center">
+
+| 🌐 Website | 📚 Documentation | 📅 Book a Demo | 💼 Enterprise Support | 🏢 Adopters |
+|:---:|:---:|:---:|:---:|:---:|
+| [Visit](https://website.projectsveltos.io) | [Get Started](https://projectsveltos.github.io/sveltos/) | [Schedule 30 min](https://cal.com/gianluca-mardente-nuclsu/30min) | [Contact Us](mailto:gianluca@projectsveltos.io) | [View List](https://github.com/projectsveltos/adopters/blob/main/ADOPTERS.md) |
+
+</div>
 
 <img src="https://raw.githubusercontent.com/projectsveltos/sveltos/main/docs/assets/logo.png" width="200">
 
@@ -292,7 +303,7 @@ It is possible to filter by:
 
 . ```name=<string>``` => returns only ClusterProfiles/Profiles whose name contains the speficied string
 
-. ```dryrun``` => returns only ClusterProfiles/Profiles with syncMode set to DryRun
+. ```dryRun``` => returns only ClusterProfiles/Profiles with syncMode set to DryRun
 
 returns all profiles grouped by tier.
 Each profile contains:
