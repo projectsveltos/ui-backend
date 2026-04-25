@@ -481,6 +481,36 @@ When the controller has not yet generated a ClusterReport for the profile+cluste
 }
 ```
 
+### Get Sveltos Stats
+
+```/stats```
+
+Returns counts of Sveltos resources accessible to the requesting user. No query parameters are required.
+
+Response fields:
+
+- `capiClusters` — total number of accessible ClusterAPI powered clusters
+- `notReadyCAPIClusters` — number of CAPI clusters whose control plane is not yet initialized
+- `sveltosClusters` — total number of accessible SveltosClusters
+- `notReadySveltosClusters` — number of SveltosClusters that are not ready
+- `pullModeClusters` — number of SveltosClusters running in pull mode (agent-based)
+- `clusterProfiles` — number of accessible ClusterProfiles
+- `profiles` — number of accessible Profiles
+- `clusterSummaries` — number of accessible ClusterSummaries (one per profile+cluster pair)
+- `eventTriggers` — number of accessible EventTriggers
+
+Each count reflects only the resources the authenticated user has permission to view.
+
+```
+http://localhost:9000/stats
+```
+
+returns
+
+```json
+{"capiClusters":1,"notReadyCAPIClusters":0,"sveltosClusters":1,"notReadySveltosClusters":0,"pullModeClusters":0,"clusterProfiles":12,"profiles":0,"clusterSummaries":11,"eventTriggers":1}
+```
+
 ### Get list of EventTriggers
 
 ```/events```

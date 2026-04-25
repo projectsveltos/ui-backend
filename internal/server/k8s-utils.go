@@ -437,3 +437,93 @@ func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profil
 
 	return &spec, accessibleMatchingClusters, nil
 }
+
+// canListClusterSummaries verifies whether user has permission to list ClusterSummaries
+func (m *instance) canListClusterSummaries(user string) (bool, error) {
+	clientset, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clientset: %v", err))
+		return false, err
+	}
+
+	sar := &authorizationapi.SubjectAccessReview{
+		Spec: authorizationapi.SubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationapi.ResourceAttributes{
+				Verb:     "list",
+				Group:    configv1beta1.GroupVersion.Group,
+				Version:  configv1beta1.GroupVersion.Version,
+				Resource: configv1beta1.ClusterSummaryKind,
+			},
+			User: user,
+		},
+	}
+
+	canI, err := clientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), sar, metav1.CreateOptions{})
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check clientset permissions: %v", err))
+		return false, err
+	}
+
+	return canI.Status.Allowed, nil
+}
+
+// canGetClusterSummary returns true if user can access ClusterSummary namespace/name
+func (m *instance) canGetClusterSummary(namespace, name, user string) (bool, error) {
+	clientset, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clientset: %v", err))
+		return false, err
+	}
+
+	sar := &authorizationapi.SubjectAccessReview{
+		Spec: authorizationapi.SubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationapi.ResourceAttributes{
+				Verb:      "get",
+				Group:     configv1beta1.GroupVersion.Group,
+				Version:   configv1beta1.GroupVersion.Version,
+				Resource:  configv1beta1.ClusterSummaryKind,
+				Namespace: namespace,
+				Name:      name,
+			},
+			User: user,
+		},
+	}
+
+	canI, err := clientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), sar, metav1.CreateOptions{})
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check clientset permissions: %v", err))
+		return false, err
+	}
+
+	return canI.Status.Allowed, nil
+}
+
+// canGetEventTrigger returns true if user can access EventTrigger name
+func (m *instance) canGetEventTrigger(name, user string) (bool, error) {
+	clientset, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clientset: %v", err))
+		return false, err
+	}
+
+	sar := &authorizationapi.SubjectAccessReview{
+		Spec: authorizationapi.SubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationapi.ResourceAttributes{
+				Verb:     "get",
+				Group:    eventv1beta1.GroupVersion.Group,
+				Version:  eventv1beta1.GroupVersion.Version,
+				Resource: eventv1beta1.EventTriggerKind,
+				Name:     name,
+			},
+			User: user,
+		},
+	}
+
+	canI, err := clientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), sar, metav1.CreateOptions{})
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check clientset permissions: %v", err))
+		return false, err
+	}
+
+	return canI.Status.Allowed, nil
+}

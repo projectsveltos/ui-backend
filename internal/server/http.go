@@ -963,6 +963,27 @@ var (
 
 		c.JSON(http.StatusOK, result)
 	}
+
+	getStats = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get Sveltos stats")
+
+		user, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		stats, err := manager.getSveltosStats(c.Request.Context(), user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get stats %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, stats)
+	}
 )
 
 func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
@@ -991,6 +1012,8 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/events", getEvents)
 	// Return details about a specific EventTrigger
 	r.GET("/event", getEvent)
+	// Return counts of Sveltos resources accessible to the user
+	r.GET("/stats", getStats)
 
 	// MCP tools
 	// Return details about Sveltos installation
