@@ -25,9 +25,11 @@ import (
 )
 
 type ManagedCluster struct {
-	Namespace   string `json:"namespace"`
-	Name        string `json:"name"`
-	ClusterInfo `json:"clusterInfo"`
+	Namespace      string `json:"namespace"`
+	Name           string `json:"name"`
+	ClusterInfo    `json:"clusterInfo"`
+	HasIssues      bool `json:"hasIssues"`
+	IsProvisioning bool `json:"isProvisioning"`
 }
 
 type ManagedClusters []ManagedCluster

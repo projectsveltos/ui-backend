@@ -4,12 +4,12 @@ go 1.26.3
 
 require (
 	github.com/TwiN/go-color v1.4.1
-	github.com/fluxcd/source-controller/api v1.8.4
+	github.com/fluxcd/source-controller/api v1.8.5
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-logr/logr v1.4.3
-	github.com/modelcontextprotocol/go-sdk v1.6.0
-	github.com/onsi/ginkgo/v2 v2.28.3
-	github.com/onsi/gomega v1.40.0
+	github.com/modelcontextprotocol/go-sdk v1.6.1
+	github.com/onsi/ginkgo/v2 v2.29.0
+	github.com/onsi/gomega v1.41.0
 	github.com/pkg/errors v0.9.1
 	github.com/projectsveltos/addon-controller v1.10.0
 	github.com/projectsveltos/event-manager v1.10.0

@@ -410,6 +410,265 @@ var _ = Describe("Manager", func() {
 		Expect(clusterProfileStatuses[0].ProfileName == properClusterSummary.Name).To(BeTrue())
 	})
 
+	It("ClusterHasIssues returns true when Provisioning with a non-empty failure message (retry cycle)", func() {
+		// Sveltos retries retriable failures by moving status back to Provisioning
+		// without clearing the failure message. The message is only cleared on Provisioned.
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		failMsg := "health check failed: replicas not ready"
+		cs := createTestClusterSummary("cs-retry-cycle", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusProvisioning, FailureMessage: &failMsg},
+			},
+		)
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+	})
+
+	It("ClusterHasIssues returns false when Provisioning with no failure message", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		cs := createTestClusterSummary("cs-clean-provisioning", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusProvisioning},
+			},
+		)
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
+	It("ClusterHasIssues returns true when a ClusterSummary has a Failed feature", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		failMsg := "deploy error"
+		cs := createTestClusterSummary("cs-failed", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
+			},
+		)
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+	})
+
+	It("ClusterHasIssues returns true when a ClusterSummary has a FailedNonRetriable feature", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		cs := createTestClusterSummary("cs-failed-nr", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Resources", Status: libsveltosv1beta1.FeatureStatusFailedNonRetriable},
+			},
+		)
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+	})
+
+	It("ClusterHasIssues clears when a failed ClusterSummary recovers to Provisioned", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		failMsg := "transient error"
+		cs := createTestClusterSummary("cs-recover", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
+			},
+		)
+		manager.AddClusterProfileStatus(cs)
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+
+		// Same ClusterSummary, now provisioned — issues must clear
+		cs.Status.FeatureSummaries[0].Status = libsveltosv1beta1.FeatureStatusProvisioned
+		manager.AddClusterProfileStatus(cs)
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
+	It("ClusterHasIssues clears when the failed ClusterSummary is removed", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		failMsg := "deploy failed"
+		cs := createTestClusterSummary("cs-remove", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
+			},
+		)
+		manager.AddClusterProfileStatus(cs)
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+
+		manager.RemoveClusterProfileStatus(cs.Namespace, cs.Name)
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
+	It("ClusterHasIssues remains true when only one of two failed ClusterSummaries recovers", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		failMsg := "profile deploy failed"
+		cs1 := createTestClusterSummary("cs-multi-1", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
+			},
+		)
+		cs2 := createTestClusterSummary("cs-multi-2", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Resources", Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
+			},
+		)
+		manager.AddClusterProfileStatus(cs1)
+		manager.AddClusterProfileStatus(cs2)
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+
+		// cs1 recovers — cs2 still failing, flag must stay true
+		cs1.Status.FeatureSummaries[0].Status = libsveltosv1beta1.FeatureStatusProvisioned
+		manager.AddClusterProfileStatus(cs1)
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+
+		// cs2 also recovers — now clear
+		cs2.Status.FeatureSummaries[0].Status = libsveltosv1beta1.FeatureStatusProvisioned
+		manager.AddClusterProfileStatus(cs2)
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
+	It("ClusterIsProvisioning returns true when a ClusterSummary is cleanly Provisioning", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		cs := createTestClusterSummary("cs-provisioning-clean", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusProvisioning},
+			},
+		)
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterIsProvisioning(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
+	It("ClusterIsProvisioning returns true when a ClusterSummary is waiting for dependencies", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		depMsg := "ClusterProfile deploy-cert-manager is a dependency and it is not fully deployed yet"
+		cs := createTestClusterSummary("cs-waiting-deps", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{},
+		)
+		cs.Status.Dependencies = &depMsg
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterIsProvisioning(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+	})
+
+	It("ClusterIsProvisioning returns false when issues are present (issues take priority)", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		failMsg := "helm deploy error"
+		cs := createTestClusterSummary("cs-failed-not-provisioning", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
+			},
+		)
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+		Expect(manager.ClusterIsProvisioning(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
+	It("ClusterIsProvisioning returns false and ClusterHasIssues returns true when Provisioning with failure message", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		failMsg := "health check: replicas not matching"
+		cs := createTestClusterSummary("cs-retry-not-provisioning", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusProvisioning, FailureMessage: &failMsg},
+			},
+		)
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+		Expect(manager.ClusterIsProvisioning(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
+	It("ClusterIsProvisioning clears when ClusterSummary reaches Provisioned", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		cs := createTestClusterSummary("cs-prov-to-done", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusProvisioning},
+			},
+		)
+		manager.AddClusterProfileStatus(cs)
+		Expect(manager.ClusterIsProvisioning(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+
+		cs.Status.FeatureSummaries[0].Status = libsveltosv1beta1.FeatureStatusProvisioned
+		manager.AddClusterProfileStatus(cs)
+		Expect(manager.ClusterIsProvisioning(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
+	It("ClusterIsProvisioning clears when ClusterSummary is removed", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		cs := createTestClusterSummary("cs-prov-removed", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusProvisioning},
+			},
+		)
+		manager.AddClusterProfileStatus(cs)
+		Expect(manager.ClusterIsProvisioning(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+
+		manager.RemoveClusterProfileStatus(cs.Namespace, cs.Name)
+		Expect(manager.ClusterIsProvisioning(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
 	It("AddProfile adds a profile and update dependencies", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
