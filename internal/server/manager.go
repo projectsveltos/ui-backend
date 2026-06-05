@@ -51,6 +51,9 @@ type ClusterProfileStatus struct {
 	ClusterType libsveltosv1beta1.ClusterType `json:"clusterType"`
 	ClusterName string                        `json:"clusterName"`
 	Summary     []ClusterFeatureSummary       `json:"summary"`
+	// Dependencies is the human-readable status from ClusterSummary.Status.Dependencies.
+	// Non-empty means the ClusterSummary is waiting for one or more dependencies.
+	Dependencies string `json:"dependencies,omitempty"`
 }
 
 type ClusterFeatureSummary struct {
@@ -93,7 +96,16 @@ type instance struct {
 	sveltosClusters      map[corev1.ObjectReference]ClusterInfo
 	capiClusters         map[corev1.ObjectReference]ClusterInfo
 	clusterSummaryReport map[corev1.ObjectReference]ClusterProfileStatus
-	profiles             map[corev1.ObjectReference]ProfileInfo
+	// key: "<clusterType>/<clusterNamespace>/<clusterName>"
+	// value: set of ClusterSummary ObjectReferences that have at least one failed feature
+	// Entry is created lazily and removed when the set becomes empty.
+	clusterWithIssues map[string]*libsveltosset.Set
+	// key: same format as clusterWithIssues
+	// value: set of ClusterSummary ObjectReferences that are actively provisioning
+	// (Provisioning with no failure message, or waiting for dependencies).
+	// Entry is created lazily and removed when the set becomes empty.
+	clusterProvisioning map[string]*libsveltosset.Set
+	profiles            map[corev1.ObjectReference]ProfileInfo
 }
 
 var (
@@ -115,6 +127,8 @@ func InitializeManagerInstance(ctx context.Context, config *rest.Config, c clien
 				sveltosClusters:      make(map[corev1.ObjectReference]ClusterInfo),
 				capiClusters:         make(map[corev1.ObjectReference]ClusterInfo),
 				clusterSummaryReport: make(map[corev1.ObjectReference]ClusterProfileStatus),
+				clusterWithIssues:    make(map[string]*libsveltosset.Set),
+				clusterProvisioning:  make(map[string]*libsveltosset.Set),
 				profiles:             make(map[corev1.ObjectReference]ProfileInfo),
 				clusterMux:           sync.RWMutex{},
 				clusterStatusesMux:   sync.RWMutex{},
@@ -326,42 +340,165 @@ func (m *instance) AddClusterProfileStatus(summary *configv1beta1.ClusterSummary
 		return
 	}
 
-	// we're sure we're adding a proper cluster summary
-	// get the cluster profile name by using labels
 	profileOwnerRef, err := configv1beta1.GetProfileOwnerReference(summary)
 	if err != nil {
 		return
 	}
 
-	// initialize feature summaries slice
 	clusterFeatureSummaries := MapToClusterFeatureSummaries(&summary.Status.FeatureSummaries)
 
-	clusterProfileStatus := ClusterProfileStatus{
-		ProfileName: profileOwnerRef.Name,
-		ProfileType: profileOwnerRef.Kind,
-		Namespace:   summary.Namespace,
-		ClusterType: summary.Spec.ClusterType,
-		ClusterName: summary.Spec.ClusterName,
-		Summary:     clusterFeatureSummaries,
+	dependencies := ""
+	if summary.Status.Dependencies != nil {
+		dependencies = *summary.Status.Dependencies
 	}
+
+	clusterProfileStatus := ClusterProfileStatus{
+		ProfileName:  profileOwnerRef.Name,
+		ProfileType:  profileOwnerRef.Kind,
+		Namespace:    summary.Namespace,
+		ClusterType:  summary.Spec.ClusterType,
+		ClusterName:  summary.Spec.ClusterName,
+		Summary:      clusterFeatureSummaries,
+		Dependencies: dependencies,
+	}
+
+	csRef := getKeyFromObject(m.scheme, summary)
+	clusterKey := clusterIssuesKey(summary.Spec.ClusterType, summary.Namespace, summary.Spec.ClusterName)
 
 	m.clusterStatusesMux.Lock()
 	defer m.clusterStatusesMux.Unlock()
 
-	m.clusterSummaryReport[*getKeyFromObject(m.scheme, summary)] = clusterProfileStatus
+	m.clusterSummaryReport[*csRef] = clusterProfileStatus
+	m.updateClusterWithIssues(clusterKey, csRef, clusterSummaryHasIssues(clusterFeatureSummaries))
+	m.updateClusterProvisioning(clusterKey, csRef, clusterSummaryIsProvisioning(clusterFeatureSummaries, dependencies))
 }
 
 func (m *instance) RemoveClusterProfileStatus(summaryNamespace, summaryName string) {
-	clusterProfileStatus := &corev1.ObjectReference{
+	csRef := &corev1.ObjectReference{
 		Namespace:  summaryNamespace,
 		Name:       summaryName,
 		Kind:       configv1beta1.ClusterSummaryKind,
 		APIVersion: configv1beta1.GroupVersion.String(),
 	}
+
 	m.clusterStatusesMux.Lock()
 	defer m.clusterStatusesMux.Unlock()
 
-	delete(m.clusterSummaryReport, *clusterProfileStatus)
+	if existing, ok := m.clusterSummaryReport[*csRef]; ok {
+		clusterKey := clusterIssuesKey(existing.ClusterType, existing.Namespace, existing.ClusterName)
+		m.updateClusterWithIssues(clusterKey, csRef, false)
+		m.updateClusterProvisioning(clusterKey, csRef, false)
+	}
+
+	delete(m.clusterSummaryReport, *csRef)
+}
+
+// ClusterHasIssues returns true if the cluster has at least one ClusterSummary with a failed feature.
+func (m *instance) ClusterHasIssues(clusterType libsveltosv1beta1.ClusterType, clusterNamespace, clusterName string) bool {
+	m.clusterStatusesMux.RLock()
+	defer m.clusterStatusesMux.RUnlock()
+
+	key := clusterIssuesKey(clusterType, clusterNamespace, clusterName)
+	set, ok := m.clusterWithIssues[key]
+	return ok && set.Len() > 0
+}
+
+// clusterIssuesKey returns the map key for clusterWithIssues.
+func clusterIssuesKey(clusterType libsveltosv1beta1.ClusterType, clusterNamespace, clusterName string) string {
+	return fmt.Sprintf("%s/%s/%s", clusterType, clusterNamespace, clusterName)
+}
+
+// clusterSummaryHasIssues returns true if any feature shows an issue.
+// Two cases are covered:
+//  1. Status is explicitly Failed or FailedNonRetriable.
+//  2. Status is Provisioning but FailureMessage is non-empty — Sveltos retries retriable
+//     errors by moving status back to Provisioning without clearing the failure message;
+//     the message is only cleared when the feature reaches Provisioned.
+func clusterSummaryHasIssues(features []ClusterFeatureSummary) bool {
+	for i := range features {
+		f := features[i]
+		if f.Status == libsveltosv1beta1.FeatureStatusFailed ||
+			f.Status == libsveltosv1beta1.FeatureStatusFailedNonRetriable {
+
+			return true
+		}
+		if f.Status == libsveltosv1beta1.FeatureStatusProvisioning &&
+			f.FailureMessage != nil && *f.FailureMessage != "" {
+
+			return true
+		}
+	}
+	return false
+}
+
+// updateClusterWithIssues inserts or erases csRef from the per-cluster issues set.
+// Must be called with clusterStatusesMux held for writing.
+func (m *instance) updateClusterWithIssues(clusterKey string, csRef *corev1.ObjectReference, hasFailed bool) {
+	if hasFailed {
+		if m.clusterWithIssues[clusterKey] == nil {
+			m.clusterWithIssues[clusterKey] = &libsveltosset.Set{}
+		}
+		m.clusterWithIssues[clusterKey].Insert(csRef)
+	} else {
+		if set, ok := m.clusterWithIssues[clusterKey]; ok {
+			set.Erase(csRef)
+			if set.Len() == 0 {
+				delete(m.clusterWithIssues, clusterKey)
+			}
+		}
+	}
+}
+
+// ClusterIsProvisioning returns true when the cluster has at least one ClusterSummary that
+// is actively deploying (Provisioning with no failure) or waiting for dependencies, AND
+// has no issues. Issues take precedence — a cluster with failures is not also "provisioning".
+func (m *instance) ClusterIsProvisioning(clusterType libsveltosv1beta1.ClusterType, clusterNamespace, clusterName string) bool {
+	m.clusterStatusesMux.RLock()
+	defer m.clusterStatusesMux.RUnlock()
+
+	key := clusterIssuesKey(clusterType, clusterNamespace, clusterName)
+	if set, ok := m.clusterWithIssues[key]; ok && set.Len() > 0 {
+		return false
+	}
+	set, ok := m.clusterProvisioning[key]
+	return ok && set.Len() > 0
+}
+
+// clusterSummaryIsProvisioning returns true when the ClusterSummary is actively provisioning
+// without errors. Two conditions qualify:
+//  1. Any feature has Provisioning status with no failure message (clean in-progress deploy).
+//  2. The dependencies field is non-empty (waiting for another ClusterProfile to finish).
+func clusterSummaryIsProvisioning(features []ClusterFeatureSummary, dependencies string) bool {
+	if dependencies != "" {
+		return true
+	}
+	for i := range features {
+		f := features[i]
+		if f.Status == libsveltosv1beta1.FeatureStatusProvisioning &&
+			(f.FailureMessage == nil || *f.FailureMessage == "") {
+
+			return true
+		}
+	}
+	return false
+}
+
+// updateClusterProvisioning inserts or erases csRef from the per-cluster provisioning set.
+// Must be called with clusterStatusesMux held for writing.
+func (m *instance) updateClusterProvisioning(clusterKey string, csRef *corev1.ObjectReference, isProvisioning bool) {
+	if isProvisioning {
+		if m.clusterProvisioning[clusterKey] == nil {
+			m.clusterProvisioning[clusterKey] = &libsveltosset.Set{}
+		}
+		m.clusterProvisioning[clusterKey].Insert(csRef)
+	} else {
+		if set, ok := m.clusterProvisioning[clusterKey]; ok {
+			set.Erase(csRef)
+			if set.Len() == 0 {
+				delete(m.clusterProvisioning, clusterKey)
+			}
+		}
+	}
 }
 
 // getKeyFromObject returns the Key that can be used in the internal reconciler maps.

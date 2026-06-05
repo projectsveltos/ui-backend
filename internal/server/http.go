@@ -119,7 +119,7 @@ var (
 			return
 		}
 
-		managedClusterData := getManagedClusterData(clusters, filters)
+		managedClusterData := getManagedClusterData(clusters, filters, manager, libsveltosv1beta1.ClusterTypeCapi)
 		sort.Sort(managedClusterData)
 
 		result, err := getClustersInRange(managedClusterData, limit, skip)
@@ -174,7 +174,7 @@ var (
 			return
 		}
 
-		managedClusterData := getManagedClusterData(clusters, filters)
+		managedClusterData := getManagedClusterData(clusters, filters, manager, libsveltosv1beta1.ClusterTypeSveltos)
 		sort.Sort(managedClusterData)
 
 		result, err := getClustersInRange(managedClusterData, limit, skip)
@@ -1054,6 +1054,7 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 }
 
 func getManagedClusterData(clusters map[corev1.ObjectReference]ClusterInfo, filters *clusterFilters,
+	manager *instance, clusterType libsveltosv1beta1.ClusterType,
 ) ManagedClusters {
 
 	data := make(ManagedClusters, 0)
@@ -1077,9 +1078,11 @@ func getManagedClusterData(clusters map[corev1.ObjectReference]ClusterInfo, filt
 		}
 
 		data = append(data, ManagedCluster{
-			Namespace:   k.Namespace,
-			Name:        k.Name,
-			ClusterInfo: clusters[k],
+			Namespace:      k.Namespace,
+			Name:           k.Name,
+			ClusterInfo:    clusters[k],
+			HasIssues:      manager.ClusterHasIssues(clusterType, k.Namespace, k.Name),
+			IsProvisioning: manager.ClusterIsProvisioning(clusterType, k.Namespace, k.Name),
 		})
 	}
 
