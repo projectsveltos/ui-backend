@@ -48,6 +48,8 @@ const (
 	maxItems                 = 6
 	namespaceRequiredError   = "namespace is required"
 	clusterNameRequiredError = "cluster name is required"
+	nameRequiredError        = "name is required"
+	errorKey                 = "error"
 )
 
 type Token struct {
@@ -694,7 +696,7 @@ var (
 		}
 
 		if profileName == "" {
-			msg := "name is required"
+			msg := nameRequiredError
 			ginLogger.V(logs.LogInfo).Info(msg)
 			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
 		}
@@ -1178,14 +1180,14 @@ func getLimitAndSkipFromQuery(c *gin.Context) (limit, skip int) {
 	if queryLimit != "" {
 		limit, err = strconv.Atoi(queryLimit)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit parameter"})
+			c.JSON(http.StatusBadRequest, gin.H{errorKey: "invalid limit parameter"})
 			return
 		}
 	}
 	if querySkip != "" {
 		skip, err = strconv.Atoi(querySkip)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid skip parameter"})
+			c.JSON(http.StatusBadRequest, gin.H{errorKey: "invalid skip parameter"})
 			return
 		}
 	}
@@ -1205,7 +1207,7 @@ func getFailedOnlyFromQuery(c *gin.Context) bool {
 	if queryFailed != "" {
 		failedOnly, err = strconv.ParseBool(queryFailed)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid failed parameter"})
+			c.JSON(http.StatusBadRequest, gin.H{errorKey: "invalid failed parameter"})
 			return failedOnly
 		}
 	}
@@ -1221,15 +1223,15 @@ func getClusterFromQuery(c *gin.Context) (namespace, name string, clusterType li
 
 	// Parse the query parameters to int (handle errors)
 	if queryNamespace == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace is required"})
+		c.JSON(http.StatusBadRequest, gin.H{errorKey: namespaceRequiredError})
 		return
 	}
 	if queryName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+		c.JSON(http.StatusBadRequest, gin.H{errorKey: nameRequiredError})
 		return
 	}
 	if queryType == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cluster type is required"})
+		c.JSON(http.StatusBadRequest, gin.H{errorKey: "cluster type is required"})
 		return
 	}
 
@@ -1239,7 +1241,7 @@ func getClusterFromQuery(c *gin.Context) (namespace, name string, clusterType li
 		return queryNamespace, queryName, libsveltosv1beta1.ClusterTypeCapi
 	}
 
-	c.JSON(http.StatusBadRequest, gin.H{"error": "cluster type is incorrect"})
+	c.JSON(http.StatusBadRequest, gin.H{errorKey: "cluster type is incorrect"})
 	return
 }
 
@@ -1250,7 +1252,7 @@ func getTokenFromAuthorizationHeader(c *gin.Context) (string, error) {
 	// Check if the authorization header is present
 	if authorizationHeader == "" {
 		errorMsg := "authorization header is missing"
-		c.JSON(http.StatusUnauthorized, gin.H{"error": errorMsg})
+		c.JSON(http.StatusUnauthorized, gin.H{errorKey: errorMsg})
 		return "", errors.New(errorMsg)
 	}
 
@@ -1260,7 +1262,7 @@ func getTokenFromAuthorizationHeader(c *gin.Context) (string, error) {
 	// Check if the token is present
 	if token == "" {
 		errorMsg := "token is missing"
-		c.JSON(http.StatusUnauthorized, gin.H{"error": errorMsg})
+		c.JSON(http.StatusUnauthorized, gin.H{errorKey: errorMsg})
 		return "", errors.New(errorMsg)
 	}
 

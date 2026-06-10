@@ -41,7 +41,9 @@ import (
 )
 
 const (
-	k8sVersion = "v1.29.0"
+	k8sVersion         = "v1.29.0"
+	helmFeatureID      = "Helm"
+	resourcesFeatureID = "Resources"
 )
 
 func randomPort() string {
@@ -158,7 +160,7 @@ var _ = Describe("Manager", func() {
 			cluster.Name,
 			[]configv1beta1.FeatureSummary{
 				{
-					FeatureID:      "Helm",
+					FeatureID:      helmFeatureID,
 					Status:         libsveltosv1beta1.FeatureStatusProvisioning,
 					FailureMessage: &properClusterSummaryFailureMessage,
 				},
@@ -211,7 +213,7 @@ var _ = Describe("Manager", func() {
 		Expect(reflect.DeepEqual(v, clusterInfo)).To(BeTrue())
 	})
 
-	It("RemoveSveltosCluster removes SveltosCluster from list of managed clusters", func() {
+	It("RemoveSveltosCluster removes SveltosCluster from list of managed clusters", func() { //nolint:dupl // same flow as RemoveCAPICluster but for SveltosCluster
 		clusterRef := &corev1.ObjectReference{
 			Namespace:  sveltosCluster.Namespace,
 			Name:       sveltosCluster.Name,
@@ -274,7 +276,7 @@ var _ = Describe("Manager", func() {
 		Expect(reflect.DeepEqual(v, clusterInfo)).To(BeTrue())
 	})
 
-	It("RemoveCAPICluster removes ClusterAPI powered Cluster from list of managed clusters", func() {
+	It("RemoveCAPICluster removes ClusterAPI powered Cluster from list of managed clusters", func() { //nolint:dupl // mirrors RemoveSveltosCluster
 		clusterRef := &corev1.ObjectReference{
 			Namespace:  cluster.Namespace,
 			Name:       cluster.Name,
@@ -422,7 +424,7 @@ var _ = Describe("Manager", func() {
 		failMsg := "health check failed: replicas not ready"
 		cs := createTestClusterSummary("cs-retry-cycle", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusProvisioning, FailureMessage: &failMsg},
+				{FeatureID: helmFeatureID, Status: libsveltosv1beta1.FeatureStatusProvisioning, FailureMessage: &failMsg},
 			},
 		)
 		manager.AddClusterProfileStatus(cs)
@@ -439,7 +441,7 @@ var _ = Describe("Manager", func() {
 
 		cs := createTestClusterSummary("cs-clean-provisioning", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusProvisioning},
+				{FeatureID: helmFeatureID, Status: libsveltosv1beta1.FeatureStatusProvisioning},
 			},
 		)
 		manager.AddClusterProfileStatus(cs)
@@ -457,7 +459,7 @@ var _ = Describe("Manager", func() {
 		failMsg := "deploy error"
 		cs := createTestClusterSummary("cs-failed", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
+				{FeatureID: helmFeatureID, Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
 			},
 		)
 		manager.AddClusterProfileStatus(cs)
@@ -474,7 +476,7 @@ var _ = Describe("Manager", func() {
 
 		cs := createTestClusterSummary("cs-failed-nr", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Resources", Status: libsveltosv1beta1.FeatureStatusFailedNonRetriable},
+				{FeatureID: resourcesFeatureID, Status: libsveltosv1beta1.FeatureStatusFailedNonRetriable},
 			},
 		)
 		manager.AddClusterProfileStatus(cs)
@@ -492,7 +494,7 @@ var _ = Describe("Manager", func() {
 		failMsg := "transient error"
 		cs := createTestClusterSummary("cs-recover", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
+				{FeatureID: helmFeatureID, Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
 			},
 		)
 		manager.AddClusterProfileStatus(cs)
@@ -514,7 +516,7 @@ var _ = Describe("Manager", func() {
 		failMsg := "deploy failed"
 		cs := createTestClusterSummary("cs-remove", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
+				{FeatureID: helmFeatureID, Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
 			},
 		)
 		manager.AddClusterProfileStatus(cs)
@@ -534,12 +536,12 @@ var _ = Describe("Manager", func() {
 		failMsg := "profile deploy failed"
 		cs1 := createTestClusterSummary("cs-multi-1", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
+				{FeatureID: helmFeatureID, Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
 			},
 		)
 		cs2 := createTestClusterSummary("cs-multi-2", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Resources", Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
+				{FeatureID: resourcesFeatureID, Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
 			},
 		)
 		manager.AddClusterProfileStatus(cs1)
@@ -566,7 +568,7 @@ var _ = Describe("Manager", func() {
 
 		cs := createTestClusterSummary("cs-provisioning-clean", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusProvisioning},
+				{FeatureID: helmFeatureID, Status: libsveltosv1beta1.FeatureStatusProvisioning},
 			},
 		)
 		manager.AddClusterProfileStatus(cs)
@@ -602,7 +604,7 @@ var _ = Describe("Manager", func() {
 		failMsg := "helm deploy error"
 		cs := createTestClusterSummary("cs-failed-not-provisioning", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
+				{FeatureID: helmFeatureID, Status: libsveltosv1beta1.FeatureStatusFailed, FailureMessage: &failMsg},
 			},
 		)
 		manager.AddClusterProfileStatus(cs)
@@ -621,7 +623,7 @@ var _ = Describe("Manager", func() {
 		failMsg := "health check: replicas not matching"
 		cs := createTestClusterSummary("cs-retry-not-provisioning", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusProvisioning, FailureMessage: &failMsg},
+				{FeatureID: helmFeatureID, Status: libsveltosv1beta1.FeatureStatusProvisioning, FailureMessage: &failMsg},
 			},
 		)
 		manager.AddClusterProfileStatus(cs)
@@ -639,7 +641,7 @@ var _ = Describe("Manager", func() {
 
 		cs := createTestClusterSummary("cs-prov-to-done", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusProvisioning},
+				{FeatureID: helmFeatureID, Status: libsveltosv1beta1.FeatureStatusProvisioning},
 			},
 		)
 		manager.AddClusterProfileStatus(cs)
@@ -659,7 +661,7 @@ var _ = Describe("Manager", func() {
 
 		cs := createTestClusterSummary("cs-prov-removed", cluster.Namespace, cluster.Namespace, cluster.Name,
 			[]configv1beta1.FeatureSummary{
-				{FeatureID: "Helm", Status: libsveltosv1beta1.FeatureStatusProvisioning},
+				{FeatureID: helmFeatureID, Status: libsveltosv1beta1.FeatureStatusProvisioning},
 			},
 		)
 		manager.AddClusterProfileStatus(cs)

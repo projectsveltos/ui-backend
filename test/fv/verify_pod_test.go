@@ -30,7 +30,9 @@ import (
 
 var _ = Describe("Deployment Ready", func() {
 	const (
-		namePrefix = "health-"
+		namePrefix     = "health-"
+		kyvernoChart   = "kyverno"
+		wildflyRelease = "wildfly"
 	)
 
 	It("Verify ui-backend deployment is ready", Label("FV"), func() {
@@ -44,11 +46,11 @@ var _ = Describe("Deployment Ready", func() {
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
-				RepositoryName:   "kyverno",
+				RepositoryName:   kyvernoChart,
 				ChartName:        "kyverno/kyverno",
 				ChartVersion:     "v3.2.6",
 				ReleaseName:      "kyverno-latest",
-				ReleaseNamespace: "kyverno",
+				ReleaseNamespace: kyvernoChart,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 			{
@@ -56,8 +58,8 @@ var _ = Describe("Deployment Ready", func() {
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/wildfly",
 				ChartVersion:     "20.2.8",
-				ReleaseName:      "wildfly",
-				ReleaseNamespace: "wildfly",
+				ReleaseName:      wildflyRelease,
+				ReleaseNamespace: wildflyRelease,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
