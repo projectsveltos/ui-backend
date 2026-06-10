@@ -33,6 +33,10 @@ import (
 	"github.com/projectsveltos/ui-backend/internal/server"
 )
 
+const (
+	kubernetesVersion = "v1.35.0"
+)
+
 var _ = Describe("Events Data", func() {
 	It("Collect details of an EventTrigger", func() {
 		eventSource := &libsveltosv1beta1.EventSource{
@@ -132,7 +136,7 @@ var _ = Describe("Events Data", func() {
 		sveltosClusters := map[corev1.ObjectReference]server.ClusterInfo{
 			clusterRef1: {
 				Paused:         false,
-				Version:        "v1.35.0",
+				Version:        kubernetesVersion,
 				Ready:          true,
 				Labels:         map[string]string{randomString(): randomString()},
 				FailureMessage: nil,
@@ -142,7 +146,7 @@ var _ = Describe("Events Data", func() {
 		capiClusters := map[corev1.ObjectReference]server.ClusterInfo{
 			clusterRef2: {
 				Paused:         false,
-				Version:        "v1.35.0",
+				Version:        kubernetesVersion,
 				Ready:          true,
 				Labels:         map[string]string{randomString(): randomString()},
 				FailureMessage: nil,

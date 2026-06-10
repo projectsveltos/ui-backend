@@ -32,6 +32,11 @@ import (
 
 const (
 	noStructureContentError = "tool returned no structured content"
+	clusterRefKey           = "clusterRef"
+	namespaceKey            = "namespace"
+	nameKey                 = "name"
+	kindKey                 = "kind"
+	apiVersionKey           = "apiVersion"
 )
 
 // connect to Sveltos mcp server
@@ -153,17 +158,17 @@ func CheckProfileDeploymentOnCluster(ctx context.Context, url string, clusterRef
 	defer session.Close()
 
 	input := map[string]any{
-		"clusterRef": map[string]any{
-			"namespace":  clusterRef.Namespace,
-			"name":       clusterRef.Name,
-			"kind":       clusterRef.Kind,
-			"apiVersion": clusterRef.APIVersion,
+		clusterRefKey: map[string]any{
+			namespaceKey:  clusterRef.Namespace,
+			nameKey:       clusterRef.Name,
+			kindKey:       clusterRef.Kind,
+			apiVersionKey: clusterRef.APIVersion,
 		},
 		"profileRef": map[string]any{
-			"namespace":  profileRef.Namespace,
-			"name":       profileRef.Name,
-			"kind":       profileRef.Kind,
-			"apiVersion": profileRef.APIVersion,
+			namespaceKey:  profileRef.Namespace,
+			nameKey:       profileRef.Name,
+			kindKey:       profileRef.Kind,
+			apiVersionKey: profileRef.APIVersion,
 		},
 	}
 
@@ -242,10 +247,10 @@ func CheckClusterDeploymentStatuses(ctx context.Context, url string, clusterRef 
 	defer session.Close()
 
 	input := map[string]any{
-		"namespace":  clusterRef.Namespace,
-		"name":       clusterRef.Name,
-		"kind":       clusterRef.Kind,
-		"apiVersion": clusterRef.APIVersion,
+		namespaceKey:  clusterRef.Namespace,
+		nameKey:       clusterRef.Name,
+		kindKey:       clusterRef.Kind,
+		apiVersionKey: clusterRef.APIVersion,
 	}
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{

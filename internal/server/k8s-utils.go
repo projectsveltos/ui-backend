@@ -39,6 +39,11 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
+const (
+	verbList = "list"
+	verbGet  = "get"
+)
+
 func (m *instance) getKubernetesRestConfig(token string) (*rest.Config, error) {
 	const (
 		rootCAFile = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
@@ -91,7 +96,7 @@ func (m *instance) canListSveltosClusters(user string) (bool, error) {
 	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
-				Verb:     "list",
+				Verb:     verbList,
 				Group:    libsveltosv1beta1.GroupVersion.Group,
 				Version:  libsveltosv1beta1.GroupVersion.Version,
 				Resource: libsveltosv1beta1.SveltosClusterKind,
@@ -121,7 +126,7 @@ func (m *instance) canGetSveltosCluster(clusterNamespace, clusterName, user stri
 	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
-				Verb:      "get",
+				Verb:      verbGet,
 				Group:     libsveltosv1beta1.GroupVersion.Group,
 				Version:   libsveltosv1beta1.GroupVersion.Version,
 				Resource:  libsveltosv1beta1.SveltosClusterKind,
@@ -153,7 +158,7 @@ func (m *instance) canListCAPIClusters(user string) (bool, error) {
 	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
-				Verb:     "list",
+				Verb:     verbList,
 				Group:    clusterv1.GroupVersion.Group,
 				Version:  clusterv1.GroupVersion.Version,
 				Resource: clusterv1.ClusterKind,
@@ -183,7 +188,7 @@ func (m *instance) canGetCAPICluster(clusterNamespace, clusterName, user string)
 	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
-				Verb:      "get",
+				Verb:      verbGet,
 				Group:     clusterv1.GroupVersion.Group,
 				Version:   clusterv1.GroupVersion.Version,
 				Resource:  clusterv1.ClusterKind,
@@ -226,7 +231,7 @@ func (m *instance) canListClusterProfiles(user string) (bool, error) {
 	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
-				Verb:     "get",
+				Verb:     verbGet,
 				Group:    configv1beta1.GroupVersion.Group,
 				Version:  configv1beta1.GroupVersion.Version,
 				Resource: configv1beta1.ClusterProfileKind,
@@ -256,7 +261,7 @@ func (m *instance) canListEventTriggers(user string) (bool, error) {
 	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
-				Verb:     "get",
+				Verb:     verbGet,
 				Group:    eventv1beta1.GroupVersion.Group,
 				Version:  eventv1beta1.GroupVersion.Version,
 				Resource: eventv1beta1.EventTriggerKind,
@@ -286,7 +291,7 @@ func (m *instance) canGetClusterProfile(clusterProfileName, user string) (bool, 
 	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
-				Verb:     "get",
+				Verb:     verbGet,
 				Group:    configv1beta1.GroupVersion.Group,
 				Version:  configv1beta1.GroupVersion.Version,
 				Resource: configv1beta1.ClusterProfileKind,
@@ -317,7 +322,7 @@ func (m *instance) canListProfiles(user string) (bool, error) {
 	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
-				Verb:     "get",
+				Verb:     verbGet,
 				Group:    configv1beta1.GroupVersion.Group,
 				Version:  configv1beta1.GroupVersion.Version,
 				Resource: configv1beta1.ProfileKind,
@@ -347,7 +352,7 @@ func (m *instance) canGetProfile(profileNamespace, profileName, user string) (bo
 	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
-				Verb:      "get",
+				Verb:      verbGet,
 				Group:     configv1beta1.GroupVersion.Group,
 				Version:   configv1beta1.GroupVersion.Version,
 				Resource:  configv1beta1.ProfileKind,
@@ -449,7 +454,7 @@ func (m *instance) canListClusterSummaries(user string) (bool, error) {
 	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
-				Verb:     "list",
+				Verb:     verbList,
 				Group:    configv1beta1.GroupVersion.Group,
 				Version:  configv1beta1.GroupVersion.Version,
 				Resource: configv1beta1.ClusterSummaryKind,
@@ -478,7 +483,7 @@ func (m *instance) canGetClusterSummary(namespace, name, user string) (bool, err
 	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
-				Verb:      "get",
+				Verb:      verbGet,
 				Group:     configv1beta1.GroupVersion.Group,
 				Version:   configv1beta1.GroupVersion.Version,
 				Resource:  configv1beta1.ClusterSummaryKind,
@@ -509,7 +514,7 @@ func (m *instance) canGetEventTrigger(name, user string) (bool, error) {
 	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
-				Verb:     "get",
+				Verb:     verbGet,
 				Group:    eventv1beta1.GroupVersion.Group,
 				Version:  eventv1beta1.GroupVersion.Version,
 				Resource: eventv1beta1.EventTriggerKind,
