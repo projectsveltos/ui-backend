@@ -466,9 +466,17 @@ func (m *instance) ClusterIsProvisioning(clusterType libsveltosv1beta1.ClusterTy
 
 // clusterSummaryIsProvisioning returns true when the ClusterSummary is actively provisioning
 // without errors. Two conditions qualify:
-//  1. Any feature has Provisioning status with no failure message (clean in-progress deploy).
-//  2. The dependencies field is non-empty (waiting for another ClusterProfile to finish).
+//  1. The dependencies field is non-empty and not all features are Provisioned yet
+//     (waiting for another ClusterProfile to finish).
+//  2. Any feature has Provisioning status with no failure message (clean in-progress deploy).
+//
+// If all features are already Provisioned the ClusterSummary is done regardless of what
+// the dependencies string says — the addon-controller writes informational messages like
+// "All dependencies deployed" even after work is complete.
 func clusterSummaryIsProvisioning(features []ClusterFeatureSummary, dependencies string) bool {
+	if allFeaturesProvisioned(features) {
+		return false
+	}
 	if dependencies != "" {
 		return true
 	}
@@ -481,6 +489,22 @@ func clusterSummaryIsProvisioning(features []ClusterFeatureSummary, dependencies
 		}
 	}
 	return false
+}
+
+// allFeaturesProvisioned returns true when every feature in the ClusterSummary has
+// reached FeatureStatusProvisioned. An empty feature list is not considered fully
+// provisioned — the ClusterSummary may still be waiting on dependencies before
+// deploying begins.
+func allFeaturesProvisioned(features []ClusterFeatureSummary) bool {
+	if len(features) == 0 {
+		return false
+	}
+	for i := range features {
+		if features[i].Status != libsveltosv1beta1.FeatureStatusProvisioned {
+			return false
+		}
+	}
+	return true
 }
 
 // updateClusterProvisioning inserts or erases csRef from the per-cluster provisioning set.
