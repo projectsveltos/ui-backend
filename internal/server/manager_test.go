@@ -652,6 +652,27 @@ var _ = Describe("Manager", func() {
 		Expect(manager.ClusterIsProvisioning(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
 	})
 
+	It("ClusterIsProvisioning returns false when all features are Provisioned even if dependencies string is set", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		// addon-controller sets Status.Dependencies to "All dependencies deployed" even after
+		// the ClusterSummary is fully provisioned; ui-backend must not treat that as provisioning.
+		depMsg := "All dependencies deployed"
+		cs := createTestClusterSummary("cs-provisioned-with-dep-msg", cluster.Namespace, cluster.Namespace, cluster.Name,
+			[]configv1beta1.FeatureSummary{
+				{FeatureID: helmFeatureID, Status: libsveltosv1beta1.FeatureStatusProvisioned},
+			},
+		)
+		cs.Status.Dependencies = &depMsg
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterIsProvisioning(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
 	It("ClusterIsProvisioning clears when ClusterSummary is removed", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
