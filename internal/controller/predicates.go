@@ -66,6 +66,10 @@ func (p SveltosClusterPredicate) Update(e event.UpdateEvent) bool {
 		return true
 	}
 
+	if !reflect.DeepEqual(oldSveltosCluster.Labels, newSveltosCluster.Labels) {
+		return true
+	}
+
 	return false
 }
 
@@ -112,6 +116,10 @@ func (p ClusterStatusPredicate) Update(e event.UpdateEvent) bool {
 	if oldCluster.Status.Phase != string(clusterv1.ClusterPhaseDeleting) &&
 		newCluster.Status.Phase == string(clusterv1.ClusterPhaseDeleting) {
 
+		return true
+	}
+
+	if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
 		return true
 	}
 
