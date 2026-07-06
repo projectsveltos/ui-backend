@@ -474,7 +474,7 @@ var (
 		}
 		if !canGetResource {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("user does not have permission to access resource. URI: %s", c.Request.URL))
-			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this resource"))
 			return
 		}
 
@@ -538,13 +538,7 @@ var (
 			return
 		}
 
-		if !canListEventTriggers {
-			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("user does not have permission to access resource. URI: %s", c.Request.URL))
-			_ = c.AbortWithError(http.StatusUnauthorized, err)
-			return
-		}
-
-		eventTriggers, err := manager.getEventTriggers(c.Request.Context())
+		eventTriggers, err := manager.getEventTriggers(c.Request.Context(), canListEventTriggers, user)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get eventTriggers %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusUnauthorized, err)
@@ -599,9 +593,17 @@ var (
 		}
 
 		if !canListEventTriggers {
-			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("user does not have permission to access resource. URI: %s", c.Request.URL))
-			_ = c.AbortWithError(http.StatusUnauthorized, err)
-			return
+			canGetEventTrigger, err := manager.canGetEventTrigger(eventTriggerName, user)
+			if err != nil {
+				ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+				_ = c.AbortWithError(http.StatusUnauthorized, err)
+				return
+			}
+			if !canGetEventTrigger {
+				ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("user does not have permission to access resource. URI: %s", c.Request.URL))
+				_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this eventTrigger"))
+				return
+			}
 		}
 
 		canListAll, err := manager.canListCAPIClusters(user)
@@ -740,7 +742,7 @@ var (
 		}
 		if !canGetResource {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("user does not have permission to access resource. URI: %s", c.Request.URL))
-			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this resource"))
 			return
 		}
 
