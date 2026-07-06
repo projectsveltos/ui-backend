@@ -139,8 +139,9 @@ func getEventsInRange(eventTriggers []EventTrigger, limit, skip int) ([]EventTri
 	return getSliceInRange(eventTriggers, limit, skip)
 }
 
-// Return a list of existing EventTriggers
-func (m *instance) getEventTriggers(ctx context.Context,
+// Return a list of existing EventTriggers. If canListAll is false, the result is
+// filtered down to only the EventTriggers user has explicit get access to.
+func (m *instance) getEventTriggers(ctx context.Context, canListAll bool, user string,
 ) (map[corev1.ObjectReference]EventTriggerInfo, error) {
 
 	eventTriggers := &eventv1beta1.EventTriggerList{}
@@ -155,6 +156,13 @@ func (m *instance) getEventTriggers(ctx context.Context,
 
 		if !et.GetDeletionTimestamp().IsZero() {
 			continue
+		}
+
+		if !canListAll {
+			ok, err := m.canGetEventTrigger(et.Name, user)
+			if err != nil || !ok {
+				continue
+			}
 		}
 
 		eventRef := corev1.ObjectReference{
