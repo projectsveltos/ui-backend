@@ -498,6 +498,8 @@ Response fields:
 - `profiles` — number of accessible Profiles
 - `clusterSummaries` — number of accessible ClusterSummaries (one per profile+cluster pair)
 - `eventTriggers` — number of accessible EventTriggers
+- `classifiers` — number of accessible Classifiers
+- `managementClusterClassifiers` — number of accessible ManagementClusterClassifiers
 
 Each count reflects only the resources the authenticated user has permission to view.
 
@@ -508,7 +510,7 @@ http://localhost:9000/stats
 returns
 
 ```json
-{"capiClusters":1,"notReadyCAPIClusters":0,"sveltosClusters":1,"notReadySveltosClusters":0,"pullModeClusters":0,"clusterProfiles":12,"profiles":0,"clusterSummaries":11,"eventTriggers":1}
+{"capiClusters":1,"notReadyCAPIClusters":0,"sveltosClusters":1,"notReadySveltosClusters":0,"pullModeClusters":0,"clusterProfiles":12,"profiles":0,"clusterSummaries":11,"eventTriggers":1,"classifiers":1,"managementClusterClassifiers":1}
 ```
 
 ### Get list of EventTriggers
@@ -538,6 +540,76 @@ Response contains:
 
 ```json
 {"eventTriggerName":"service-network-policy","clusterSelector":{"matchLabels":{"env":"fv"}},"eventSource":{"kind":"EventSource","apiVersion":"lib.projectsveltos.io/v1beta1","metadata":{"name":"sveltos-service"},"spec":{"resourceSelectors":[{"group":"","version":"v1","kind":"Service","labelFilters":[{"key":"sveltos","operation":"Equal","value":"fv"}]}],"collectResources":true}},"clusterEventMatches":[{"clusterNamespace":"default","clusterName":"clusterapi-workload","clusterKind":"Cluster","labels":{"cluster.x-k8s.io/cluster-name":"clusterapi-workload","env":"fv","sveltos-agent":"present","topology.cluster.x-k8s.io/owned":""},"version":"v1.35.0","ready":true,"paused":true,"failureMessage":null,"resources":[{"name":"my-service","namespace":"default","group":"","kind":"Service","version":"","profileNames":null}]}]}
+```
+
+### Get list of Classifiers
+
+```/classifiers```
+
+Returns a summary of all Classifier and ManagementClusterClassifier instances the user can access.
+
+It is possible to filter by cluster:
+
+. ```cluster_namespace=<string>``` => returns only classifiers currently matching a cluster in this namespace
+
+. ```cluster_name=<string>``` => returns only classifiers currently matching a cluster with this name
+
+. ```cluster_type=<Capi|Sveltos>``` => returns only classifiers currently matching a cluster of this type
+
+When a cluster filter is set, the list is narrowed to instances currently matching that cluster, but each entry's `matchingClusterCount` still reflects the instance's total match count across all clusters, not just the filtered one.
+
+This API supports pagination. Use:
+
+. ```limit=<int>``` to specify the number of classifiers the API will return
+
+. ```skip=<int>``` to specify from which classifier to start (classifiers are ordered by name, then type)
+
+For instance:
+
+```
+http://localhost:9000/classifiers
+```
+
+returns
+
+```json
+{"totalClassifiers":2,"classifiers":[{"name":"default-classifier","type":"Classifier","labelCount":1,"matchingClusterCount":2},{"name":"tag-production-clusters","type":"ManagementClusterClassifier","labelCount":2,"matchingClusterCount":1}]}
+```
+
+### Get Classifier Details
+
+```/classifier?name=<classifier name>&type=<Classifier|ManagementClusterClassifier>```
+
+Response contains:
+
+- Name: name of the Classifier/ManagementClusterClassifier
+- Type: `Classifier` or `ManagementClusterClassifier`
+- Spec fields specific to the type: resource selectors, aggregated classification and kubernetes version constraints for `Classifier`; match resources and classification Lua for `ManagementClusterClassifier`
+- ClassifierLabels: the labels this instance is configured to add to matching clusters
+- MatchingClusters: clusters currently matching this instance. For each cluster: the labels it currently owns there (joined from the corresponding ClassifierReport/ManagementClusterClassifierReport), and any labels this instance would like to manage but currently cannot because a different Classifier or ManagementClusterClassifier already owns them
+
+For instance:
+
+```
+http://localhost:9000/classifier?name=default-classifier&type=Classifier
+```
+
+returns
+
+```json
+{"name":"default-classifier","type":"Classifier","classifierLabels":[{"key":"sveltos-agent","value":"present"}],"matchingClusters":[{"clusterNamespace":"default","clusterName":"clusterapi-workload","clusterType":"Capi","managedLabels":[{"key":"sveltos-agent","value":"present"}]},{"clusterNamespace":"mgmt","clusterName":"mgmt","clusterType":"Sveltos","managedLabels":[{"key":"sveltos-agent","value":"present"}]}]}
+```
+
+For a ManagementClusterClassifier:
+
+```
+http://localhost:9000/classifier?name=tag-production-clusters&type=ManagementClusterClassifier
+```
+
+returns
+
+```json
+{"name":"tag-production-clusters","type":"ManagementClusterClassifier","matchResources":[{"group":"","version":"v1","kind":"ConfigMap","namespace":"projectsveltos","selector":{"matchLabels":{"sveltos.io/env":"production"}}}],"classificationLua":"function evaluate(resources)\n  local result = {}\n  for _, cm in ipairs(resources) do\n    local ns = cm.data.clusterNamespace\n    local name = cm.data.clusterName\n    if ns ~= nil and name ~= nil then\n      table.insert(result, {namespace=ns, name=name, kind=\"Cluster\"})\n    end\n  end\n  return result\nend\n","classifierLabels":[{"key":"env","value":"fv"},{"key":"cost-centre","value":"platform"}],"matchingClusters":[{"clusterNamespace":"default","clusterName":"clusterapi-workload","clusterType":"Capi","managedLabels":[{"key":"env","value":"fv"},{"key":"cost-centre","value":"platform"}]}]}
 ```
 
 ### How to get token

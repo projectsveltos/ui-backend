@@ -36,6 +36,7 @@ import (
 	"github.com/spf13/pflag"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	cliflag "k8s.io/component-base/cli/flag"
@@ -73,9 +74,12 @@ var (
 )
 
 const (
-	defaultReconcilers  = 10
-	mebibytes_bytes     = 1 << 20
-	gibibytes_per_bytes = 1 << 30
+	defaultReconcilers = 10
+	mebibytes_bytes    = 1 << 20
+	// memoryLimitCoefficient is the fraction of the container memory limit that
+	// GOMEMLIMIT is set to. Kept below 1 so Go's GC reacts to memory pressure
+	// and frees memory before the kubelet OOM-kills the container.
+	memoryLimitCoefficient = 0.75
 )
 
 // Add RBAC for the authorized diagnostics endpoint.
@@ -95,6 +99,13 @@ const (
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=eventsources/status,verbs=get;list;watch
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=eventreports,verbs=get;list;watch
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=eventreports/status,verbs=get;list;watch
+
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=classifiers,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=classifiers/status,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=managementclusterclassifiers,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=managementclusterclassifiers/status,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=classifierreports,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=managementclusterclassifierreports,verbs=get;list;watch
 
 func main() {
 	scheme, err := controller.InitScheme()
@@ -120,6 +131,9 @@ func main() {
 			}),
 		Cache: cache.Options{
 			SyncPeriod: &syncPeriod,
+			// ui-backend never reads managedFields; stripping them before they
+			// are committed to the cache significantly reduces its memory usage.
+			DefaultTransform: cache.TransformStripManagedFields(),
 		},
 		PprofBindAddress: profilerAddress,
 	}
@@ -141,7 +155,7 @@ func main() {
 		libsveltosv1beta1.ComponentUIBackend, ctrl.Log.WithName("log-setter"),
 		ctrl.GetConfigOrDie())
 
-	debug.SetMemoryLimit(gibibytes_per_bytes)
+	setMemoryLimit(ctrl.Log.WithName("memory-usage"))
 	go printMemUsage(ctrl.Log.WithName("memory-usage"))
 
 	server.InitializeManagerInstance(ctx, mgr.GetConfig(), mgr.GetClient(), scheme,
@@ -290,6 +304,40 @@ func getDiagnosticsOptions() metricsserver.Options {
 			"/debug/pprof/heap":    pprof.Handler("heap"),
 		},
 	}
+}
+
+// setMemoryLimit configures GOMEMLIMIT from the container's memory limit,
+// read via the TOTAL_MEMORY_LIMIT env var (populated by a resourceFieldRef to
+// limits.memory in the deployment manifest). No-op if the env var is unset or
+// invalid, e.g. when running outside the container manifest.
+func setMemoryLimit(logger logr.Logger) {
+	limitStr := os.Getenv("TOTAL_MEMORY_LIMIT")
+	if limitStr == "" {
+		return
+	}
+
+	quantity, err := resource.ParseQuantity(limitStr)
+	if err != nil {
+		logger.Error(err, "failed to parse TOTAL_MEMORY_LIMIT", "value", limitStr)
+		return
+	}
+
+	limitBytes := quantity.Value()
+	if limitBytes <= 0 {
+		return
+	}
+
+	aggressiveLimit := int64(float64(limitBytes) * memoryLimitCoefficient)
+	debug.SetMemoryLimit(aggressiveLimit)
+
+	var goLimitMiB uint64
+	if aggressiveLimit > 0 {
+		goLimitMiB = bToMb(uint64(aggressiveLimit))
+	}
+
+	logger.V(logs.LogDebug).Info("configured GOMEMLIMIT",
+		"container_limit_mib", bToMb(uint64(limitBytes)),
+		"go_limit_mib", goLimitMiB)
 }
 
 // printMemUsage memory stats. Call GC

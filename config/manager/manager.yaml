@@ -50,6 +50,11 @@ spec:
         - /manager
         args:
         - --v=5
+        env:
+        - name: TOTAL_MEMORY_LIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
         image: controller:latest
         name: manager
         ports:

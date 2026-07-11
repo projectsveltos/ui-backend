@@ -532,3 +532,122 @@ func (m *instance) canGetEventTrigger(name, user string) (bool, error) {
 
 	return canI.Status.Allowed, nil
 }
+
+// canListClassifiers verifies whether user has permission to view Classifiers
+func (m *instance) canListClassifiers(user string) (bool, error) {
+	clientset, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clientset: %v", err))
+		return false, err
+	}
+
+	sar := &authorizationapi.SubjectAccessReview{
+		Spec: authorizationapi.SubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationapi.ResourceAttributes{
+				Verb:     verbGet,
+				Group:    libsveltosv1beta1.GroupVersion.Group,
+				Version:  libsveltosv1beta1.GroupVersion.Version,
+				Resource: libsveltosv1beta1.ClassifierKind,
+			},
+			User: user,
+		},
+	}
+
+	canI, err := clientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), sar, metav1.CreateOptions{})
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check clientset permissions: %v", err))
+		return false, err
+	}
+
+	return canI.Status.Allowed, nil
+}
+
+// canGetClassifier returns true if user can access Classifier name
+func (m *instance) canGetClassifier(name, user string) (bool, error) {
+	clientset, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clientset: %v", err))
+		return false, err
+	}
+
+	sar := &authorizationapi.SubjectAccessReview{
+		Spec: authorizationapi.SubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationapi.ResourceAttributes{
+				Verb:     verbGet,
+				Group:    libsveltosv1beta1.GroupVersion.Group,
+				Version:  libsveltosv1beta1.GroupVersion.Version,
+				Resource: libsveltosv1beta1.ClassifierKind,
+				Name:     name,
+			},
+			User: user,
+		},
+	}
+
+	canI, err := clientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), sar, metav1.CreateOptions{})
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check clientset permissions: %v", err))
+		return false, err
+	}
+
+	return canI.Status.Allowed, nil
+}
+
+// canListManagementClusterClassifiers verifies whether user has permission to view
+// ManagementClusterClassifiers
+func (m *instance) canListManagementClusterClassifiers(user string) (bool, error) {
+	clientset, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clientset: %v", err))
+		return false, err
+	}
+
+	sar := &authorizationapi.SubjectAccessReview{
+		Spec: authorizationapi.SubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationapi.ResourceAttributes{
+				Verb:     verbGet,
+				Group:    libsveltosv1beta1.GroupVersion.Group,
+				Version:  libsveltosv1beta1.GroupVersion.Version,
+				Resource: libsveltosv1beta1.ManagementClusterClassifierKind,
+			},
+			User: user,
+		},
+	}
+
+	canI, err := clientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), sar, metav1.CreateOptions{})
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check clientset permissions: %v", err))
+		return false, err
+	}
+
+	return canI.Status.Allowed, nil
+}
+
+// canGetManagementClusterClassifier returns true if user can access ManagementClusterClassifier name
+func (m *instance) canGetManagementClusterClassifier(name, user string) (bool, error) {
+	clientset, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clientset: %v", err))
+		return false, err
+	}
+
+	sar := &authorizationapi.SubjectAccessReview{
+		Spec: authorizationapi.SubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationapi.ResourceAttributes{
+				Verb:     verbGet,
+				Group:    libsveltosv1beta1.GroupVersion.Group,
+				Version:  libsveltosv1beta1.GroupVersion.Version,
+				Resource: libsveltosv1beta1.ManagementClusterClassifierKind,
+				Name:     name,
+			},
+			User: user,
+		},
+	}
+
+	canI, err := clientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), sar, metav1.CreateOptions{})
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check clientset permissions: %v", err))
+		return false, err
+	}
+
+	return canI.Status.Allowed, nil
+}

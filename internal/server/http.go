@@ -645,6 +645,137 @@ var (
 		c.JSON(http.StatusOK, details)
 	}
 
+	getClassifiers = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get classifiers")
+
+		limit, skip := getLimitAndSkipFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
+
+		filters := getClassifierFiltersFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: name %q cluster_namespace %q cluster_name %q",
+			filters.Name, filters.ClusterNamespace, filters.ClusterName))
+
+		user, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		canListClassifiers, err := manager.canListClassifiers(user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		canListManagementClusterClassifiers, err := manager.canListManagementClusterClassifiers(user)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		classifierData, err := manager.getClassifiers(c.Request.Context(), canListClassifiers,
+			canListManagementClusterClassifiers, user, filters)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get classifiers %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		sort.Sort(classifierData)
+
+		result, err := getClassifiersInRange(classifierData, limit, skip)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		response := ClassifiersResult{
+			TotalClassifiers: len(classifierData),
+			Classifiers:      result,
+		}
+
+		// Return JSON response
+		c.JSON(http.StatusOK, response)
+	}
+
+	getClassifier = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get a classifier")
+
+		name := c.Query("name")
+		classifierType := c.Query("type")
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: name %q type %q", name, classifierType))
+
+		if name == "" {
+			msg := nameRequiredError
+			ginLogger.V(logs.LogInfo).Info(msg)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
+			return
+		}
+
+		if classifierType != libsveltosv1beta1.ClassifierKind &&
+			classifierType != libsveltosv1beta1.ManagementClusterClassifierKind {
+
+			msg := "type must be Classifier or ManagementClusterClassifier"
+			ginLogger.V(logs.LogInfo).Info(msg)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
+			return
+		}
+
+		user, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		var canListAll bool
+		if classifierType == libsveltosv1beta1.ClassifierKind {
+			canListAll, err = manager.canListClassifiers(user)
+		} else {
+			canListAll, err = manager.canListManagementClusterClassifiers(user)
+		}
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if !canListAll {
+			var canGet bool
+			if classifierType == libsveltosv1beta1.ClassifierKind {
+				canGet, err = manager.canGetClassifier(name, user)
+			} else {
+				canGet, err = manager.canGetManagementClusterClassifier(name, user)
+			}
+			if err != nil {
+				ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+				_ = c.AbortWithError(http.StatusUnauthorized, err)
+				return
+			}
+			if !canGet {
+				ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("user does not have permission to access resource. URI: %s", c.Request.URL))
+				_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this classifier"))
+				return
+			}
+		}
+
+		details, err := manager.GetClassifierDetails(c.Request.Context(), name, classifierType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get classifier details. %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		// Return JSON response
+		c.JSON(http.StatusOK, details)
+	}
+
 	checkInstallationState = func(c *gin.Context) {
 		ginLogger.V(logs.LogDebug).Info("check Sveltos installation status")
 
@@ -918,54 +1049,12 @@ var (
 
 	analyzeEventPipeline = func(c *gin.Context) {
 		ginLogger.V(logs.LogDebug).Info("check EventTrigger errors")
+		handleAnalyzePipeline(c, "event_name", mcpclient.AnalyzeEventPipeline)
+	}
 
-		namespace, name, clusterType := getClusterFromQuery(c)
-		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
-		eventTriggerName := c.Query("event_name")
-		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("eventTrigger %s", eventTriggerName))
-
-		user, err := validateToken(c)
-		if err != nil {
-			_ = c.AbortWithError(http.StatusBadRequest, err)
-			return
-		}
-
-		manager := GetManagerInstance()
-
-		canGetCluster, err := manager.canGetCluster(namespace, name, user, clusterType)
-		if err != nil {
-			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
-			_ = c.AbortWithError(http.StatusUnauthorized, err)
-			return
-		}
-
-		if !canGetCluster {
-			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this cluster"))
-			return
-		}
-
-		clusterKind := clusterv1.ClusterKind
-		clusterApiVersion := clusterv1.GroupVersion.String()
-		if clusterType == libsveltosv1beta1.ClusterTypeSveltos {
-			clusterApiVersion = libsveltosv1beta1.GroupVersion.String()
-			clusterKind = libsveltosv1beta1.SveltosClusterKind
-		}
-		clusterRef := &corev1.ObjectReference{
-			Kind:       clusterKind,
-			APIVersion: clusterApiVersion,
-			Namespace:  namespace,
-			Name:       name,
-		}
-
-		result, err := mcpclient.AnalyzeEventPipeline(c.Request.Context(), getMCPServerURL(),
-			clusterRef, eventTriggerName, ginLogger)
-		if err != nil {
-			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check profile deployment errors: %v", err))
-			_ = c.AbortWithError(http.StatusInternalServerError, err)
-			return
-		}
-
-		c.JSON(http.StatusOK, result)
+	analyzeClassifierPipeline = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("check Classifier errors")
+		handleAnalyzePipeline(c, "classifier_name", mcpclient.AnalyzeClassifierPipeline)
 	}
 
 	getStats = func(c *gin.Context) {
@@ -1016,6 +1105,10 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/events", getEvents)
 	// Return details about a specific EventTrigger
 	r.GET("/event", getEvent)
+	// Return existing Classifiers and ManagementClusterClassifiers
+	r.GET("/classifiers", getClassifiers)
+	// Return details about a specific Classifier or ManagementClusterClassifier
+	r.GET("/classifier", getClassifier)
 	// Return counts of Sveltos resources accessible to the user
 	r.GET("/stats", getStats)
 
@@ -1028,6 +1121,8 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/debugCluster", checkClusterDeploymentStatuses)
 	// Return details about event errors for a given EventTrigger and Cluster
 	r.GET("/analyzeEventPipeline", analyzeEventPipeline)
+	// Return details about classifier errors for a given Classifier/ManagementClusterClassifier and Cluster
+	r.GET("/analyzeClassifierPipeline", analyzeClassifierPipeline)
 	// Return dryrun diff for a given profile+cluster pair
 	r.GET("/dryRunChanges", getDryRunChanges)
 
@@ -1245,6 +1340,63 @@ func getClusterFromQuery(c *gin.Context) (namespace, name string, clusterType li
 
 	c.JSON(http.StatusBadRequest, gin.H{errorKey: "cluster type is incorrect"})
 	return
+}
+
+// analyzePipelineFunc matches mcpclient.AnalyzeEventPipeline/AnalyzeClassifierPipeline: trace
+// a pipeline for one resource/cluster pair and return the issues detected.
+type analyzePipelineFunc func(ctx context.Context, url string, clusterRef *corev1.ObjectReference,
+	resourceName string, logger logr.Logger) ([]string, error)
+
+// handleAnalyzePipeline is the shared handler body for the /analyzeEventPipeline and
+// /analyzeClassifierPipeline MCP debug endpoints: resolve the cluster and resource name from
+// the query, check the caller can access the cluster, then delegate to analyze.
+func handleAnalyzePipeline(c *gin.Context, resourceQueryParam string, analyze analyzePipelineFunc) {
+	namespace, name, clusterType := getClusterFromQuery(c)
+	ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
+	resourceName := c.Query(resourceQueryParam)
+	ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("%s %s", resourceQueryParam, resourceName))
+
+	user, err := validateToken(c)
+	if err != nil {
+		_ = c.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	manager := GetManagerInstance()
+
+	canGetCluster, err := manager.canGetCluster(namespace, name, user, clusterType)
+	if err != nil {
+		ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+		_ = c.AbortWithError(http.StatusUnauthorized, err)
+		return
+	}
+
+	if !canGetCluster {
+		_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this cluster"))
+		return
+	}
+
+	clusterKind := clusterv1.ClusterKind
+	clusterApiVersion := clusterv1.GroupVersion.String()
+	if clusterType == libsveltosv1beta1.ClusterTypeSveltos {
+		clusterApiVersion = libsveltosv1beta1.GroupVersion.String()
+		clusterKind = libsveltosv1beta1.SveltosClusterKind
+	}
+	clusterRef := &corev1.ObjectReference{
+		Kind:       clusterKind,
+		APIVersion: clusterApiVersion,
+		Namespace:  namespace,
+		Name:       name,
+	}
+
+	result, err := analyze(c.Request.Context(), getMCPServerURL(), clusterRef, resourceName, ginLogger)
+	if err != nil {
+		ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to analyze pipeline: %v", err))
+		_ = c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 func getTokenFromAuthorizationHeader(c *gin.Context) (string, error) {
