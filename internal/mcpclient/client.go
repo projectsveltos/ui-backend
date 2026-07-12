@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -38,6 +39,23 @@ const (
 	kindKey                 = "kind"
 	apiVersionKey           = "apiVersion"
 )
+
+// contentToString renders MCP tool result content (typically a single TextContent block
+// describing an error) as a human-readable string. mcp.Content is an interface with no
+// String() method, so formatting it directly with %v prints pointer addresses instead of
+// the actual message.
+func contentToString(content []mcp.Content) string {
+	var parts []string
+	for _, c := range content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			parts = append(parts, tc.Text)
+		}
+	}
+	if len(parts) == 0 {
+		return fmt.Sprintf("%d content block(s)", len(content))
+	}
+	return strings.Join(parts, "; ")
+}
 
 // connect to Sveltos mcp server
 func connect(ctx context.Context, url string, logger logr.Logger) (*mcp.ClientSession, error) {
@@ -99,7 +117,7 @@ func CheckInstallation(ctx context.Context, url string, logger logr.Logger) (*Sv
 	}
 
 	if result.IsError {
-		errorMsg := fmt.Sprintf("MCP installation_status returned error: %v", result.Content)
+		errorMsg := fmt.Sprintf("MCP installation_status returned error: %s", contentToString(result.Content))
 		logger.V(logs.LogInfo).Info(errorMsg)
 		return nil, errors.New(errorMsg)
 	}
@@ -183,7 +201,7 @@ func CheckProfileDeploymentOnCluster(ctx context.Context, url string, clusterRef
 	}
 
 	if result.IsError {
-		errorMsg := fmt.Sprintf("MCP analyze_profile_deployment returned error: %v", result.Content)
+		errorMsg := fmt.Sprintf("MCP analyze_profile_deployment returned error: %s", contentToString(result.Content))
 		logger.V(logs.LogInfo).Info(errorMsg)
 		return nil, errors.New(errorMsg)
 	}
@@ -264,7 +282,7 @@ func CheckClusterDeploymentStatuses(ctx context.Context, url string, clusterRef 
 	}
 
 	if result.IsError {
-		errorMsg := fmt.Sprintf("MCP list_deployement_errors returned error: %v", result.Content)
+		errorMsg := fmt.Sprintf("MCP list_deployement_errors returned error: %s", contentToString(result.Content))
 		logger.V(logs.LogInfo).Info(errorMsg)
 		return nil, errors.New(errorMsg)
 	}
@@ -307,29 +325,19 @@ func CheckClusterDeploymentStatuses(ctx context.Context, url string, clusterRef 
 	return &deploymentResult, nil
 }
 
-type EventPipelineStatus struct {
-	// Stage 1: Detection
-	ClusterReady                     bool   `json:"clusterReady"`
-	ClusterPaused                    bool   `json:"clusterPaused"`
-	ClusterMatched                   bool   `json:"clusterMatched"`
-	ClusterProvisioned               bool   `json:"clusterProvisioned"`
-	EventSourceName                  string `json:"eventSourceName"`
-	EventSourceFoundInControlCluster bool   `json:"eventSourceFoundInControlCluster"`
-	EventSourceFoundInManagedCluster bool   `json:"eventSourceFoundInManagedCluster"`
-	EventReportFoundInManagedCluster bool   `json:"eventReportFoundInManagedCluster"`
-	EventReportFoundInControlCluster bool   `json:"eventReportFoundInControlCluster"`
-	ResourcesDetected                int    `json:"resourcesDetected"`
-	LastEventReportTime              string `json:"lastEventReportTime,omitempty"`
-
-	// Stage 2: Result
-	InstantiatedProfile string `json:"instantiatedProfile,omitempty"`
-
-	// Issue Reporting: contains all detected issues
+// pipelineIssues is the common shape shared by every pipeline-tracing MCP tool's structured
+// result: regardless of how many stage-specific fields the tool reports, callers here only
+// ever consume the final Issues list.
+type pipelineIssues struct {
 	Issues []string `json:"issues,omitempty"`
 }
 
-func AnalyzeEventPipeline(ctx context.Context, url string, clusterRef *corev1.ObjectReference,
-	eventTriggerName string, logger logr.Logger) ([]string, error) {
+// analyzePipeline invokes a pipeline-tracing MCP tool (analyze_event_deployment_pipeline,
+// analyze_classifier_pipeline, ...) for one resource/cluster pair and returns the issues it
+// detected. resourceKey/resourceName is the tool-specific identifier argument, e.g.
+// ("eventTriggerName", "my-trigger") or ("classifierName", "my-classifier").
+func analyzePipeline(ctx context.Context, url, toolName, resourceKey, resourceName string,
+	clusterRef *corev1.ObjectReference, logger logr.Logger) ([]string, error) {
 
 	session, err := connect(ctx, url, logger)
 	if err != nil {
@@ -338,28 +346,28 @@ func AnalyzeEventPipeline(ctx context.Context, url string, clusterRef *corev1.Ob
 	}
 	defer session.Close()
 
-	input := map[string]interface{}{
-		"clusterRef": map[string]string{
-			"namespace":  clusterRef.Namespace,
-			"name":       clusterRef.Name,
-			"apiVersion": clusterRef.APIVersion,
-			"kind":       clusterRef.Kind,
+	input := map[string]any{
+		clusterRefKey: map[string]any{
+			namespaceKey:  clusterRef.Namespace,
+			nameKey:       clusterRef.Name,
+			kindKey:       clusterRef.Kind,
+			apiVersionKey: clusterRef.APIVersion,
 		},
-		"eventTriggerName": eventTriggerName,
+		resourceKey: resourceName,
 	}
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
-		Name:      "analyze_event_deployment_pipeline",
+		Name:      toolName,
 		Arguments: input,
 	})
 
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to invoked analyze_event_deployment_pipeline tool: %v", err))
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to invoked %s tool: %v", toolName, err))
 		return nil, err
 	}
 
 	if result.IsError {
-		errorMsg := fmt.Sprintf("MCP analyze_event_deployment_pipeline returned error: %v", result.Content)
+		errorMsg := fmt.Sprintf("MCP %s returned error: %s", toolName, contentToString(result.Content))
 		logger.V(logs.LogInfo).Info(errorMsg)
 		return nil, errors.New(errorMsg)
 	}
@@ -380,19 +388,18 @@ func AnalyzeEventPipeline(ctx context.Context, url string, clusterRef *corev1.Ob
 		return nil, errors.New(errorMsg)
 	}
 
-	// Unmarshal into the status struct
-	var status EventPipelineStatus
+	var status pipelineIssues
 	if err := json.Unmarshal(data, &status); err != nil {
-		errorMsg := fmt.Sprintf("failed to unmarshal result into EventPipelineStatus: %v", err)
+		errorMsg := fmt.Sprintf("failed to unmarshal %s result: %v", toolName, err)
 		logger.V(logs.LogInfo).Info(errorMsg)
 		return nil, errors.New(errorMsg)
 	}
 
-	logger.V(logs.LogInfo).Info(fmt.Sprintf("analyze_profile_deployment result: %v", status))
+	logger.V(logs.LogInfo).Info(fmt.Sprintf("%s result: %v", toolName, status))
 
 	if len(status.Issues) == 0 {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("eventTrigger %s successfully deployed on cluster %s %s/%s",
-			eventTriggerName, clusterRef.Kind, clusterRef.Namespace, clusterRef.Namespace))
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("%s successfully processed for cluster %s %s/%s",
+			resourceName, clusterRef.Kind, clusterRef.Namespace, clusterRef.Name))
 		return []string{}, nil
 	}
 
@@ -401,4 +408,18 @@ func AnalyzeEventPipeline(ctx context.Context, url string, clusterRef *corev1.Ob
 	}
 
 	return status.Issues, nil
+}
+
+func AnalyzeEventPipeline(ctx context.Context, url string, clusterRef *corev1.ObjectReference,
+	eventTriggerName string, logger logr.Logger) ([]string, error) {
+
+	return analyzePipeline(ctx, url, "analyze_event_deployment_pipeline", "eventTriggerName",
+		eventTriggerName, clusterRef, logger)
+}
+
+func AnalyzeClassifierPipeline(ctx context.Context, url string, clusterRef *corev1.ObjectReference,
+	classifierName string, logger logr.Logger) ([]string, error) {
+
+	return analyzePipeline(ctx, url, "analyze_classifier_pipeline", "classifierName",
+		classifierName, clusterRef, logger)
 }

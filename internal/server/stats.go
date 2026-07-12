@@ -22,20 +22,23 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	eventv1beta1 "github.com/projectsveltos/event-manager/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
 // Stats holds counts of Sveltos resources accessible to the requesting user.
 type Stats struct {
-	CAPIClusters            int `json:"capiClusters"`
-	NotReadyCAPIClusters    int `json:"notReadyCAPIClusters"`
-	SveltosClusters         int `json:"sveltosClusters"`
-	NotReadySveltosClusters int `json:"notReadySveltosClusters"`
-	PullModeClusters        int `json:"pullModeClusters"`
-	ClusterProfiles         int `json:"clusterProfiles"`
-	Profiles                int `json:"profiles"`
-	ClusterSummaries        int `json:"clusterSummaries"`
-	EventTriggers           int `json:"eventTriggers"`
+	CAPIClusters                 int `json:"capiClusters"`
+	NotReadyCAPIClusters         int `json:"notReadyCAPIClusters"`
+	SveltosClusters              int `json:"sveltosClusters"`
+	NotReadySveltosClusters      int `json:"notReadySveltosClusters"`
+	PullModeClusters             int `json:"pullModeClusters"`
+	ClusterProfiles              int `json:"clusterProfiles"`
+	Profiles                     int `json:"profiles"`
+	ClusterSummaries             int `json:"clusterSummaries"`
+	EventTriggers                int `json:"eventTriggers"`
+	Classifiers                  int `json:"classifiers"`
+	ManagementClusterClassifiers int `json:"managementClusterClassifiers"`
 }
 
 type clusterCounts struct {
@@ -67,16 +70,28 @@ func (m *instance) getSveltosStats(ctx context.Context, user string) (Stats, err
 		return Stats{}, err
 	}
 
+	classifiers, err := m.countClassifiers(ctx, user)
+	if err != nil {
+		return Stats{}, err
+	}
+
+	managementClusterClassifiers, err := m.countManagementClusterClassifiers(ctx, user)
+	if err != nil {
+		return Stats{}, err
+	}
+
 	return Stats{
-		CAPIClusters:            cc.capiTotal,
-		NotReadyCAPIClusters:    cc.capiNotReady,
-		SveltosClusters:         cc.sveltosTotal,
-		NotReadySveltosClusters: cc.sveltosNotReady,
-		PullModeClusters:        cc.pullMode,
-		ClusterProfiles:         clusterProfiles,
-		Profiles:                profiles,
-		ClusterSummaries:        clusterSummaries,
-		EventTriggers:           eventTriggers,
+		CAPIClusters:                 cc.capiTotal,
+		NotReadyCAPIClusters:         cc.capiNotReady,
+		SveltosClusters:              cc.sveltosTotal,
+		NotReadySveltosClusters:      cc.sveltosNotReady,
+		PullModeClusters:             cc.pullMode,
+		ClusterProfiles:              clusterProfiles,
+		Profiles:                     profiles,
+		ClusterSummaries:             clusterSummaries,
+		EventTriggers:                eventTriggers,
+		Classifiers:                  classifiers,
+		ManagementClusterClassifiers: managementClusterClassifiers,
 	}, nil
 }
 
@@ -202,6 +217,72 @@ func (m *instance) countEventTriggers(ctx context.Context, user string) (int, er
 			continue
 		}
 		ok, err := m.canGetEventTrigger(et.Name, user)
+		if err != nil {
+			continue
+		}
+		if ok {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (m *instance) countClassifiers(ctx context.Context, user string) (int, error) {
+	canList, err := m.canListClassifiers(user)
+	if err != nil {
+		return 0, err
+	}
+
+	classifiers := &libsveltosv1beta1.ClassifierList{}
+	if err := m.client.List(ctx, classifiers); err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list Classifiers: %v", err))
+		return 0, err
+	}
+
+	count := 0
+	for i := range classifiers.Items {
+		classifier := &classifiers.Items[i]
+		if !classifier.GetDeletionTimestamp().IsZero() {
+			continue
+		}
+		if canList {
+			count++
+			continue
+		}
+		ok, err := m.canGetClassifier(classifier.Name, user)
+		if err != nil {
+			continue
+		}
+		if ok {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (m *instance) countManagementClusterClassifiers(ctx context.Context, user string) (int, error) {
+	canList, err := m.canListManagementClusterClassifiers(user)
+	if err != nil {
+		return 0, err
+	}
+
+	mccs := &libsveltosv1beta1.ManagementClusterClassifierList{}
+	if err := m.client.List(ctx, mccs); err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list ManagementClusterClassifiers: %v", err))
+		return 0, err
+	}
+
+	count := 0
+	for i := range mccs.Items {
+		mcc := &mccs.Items[i]
+		if !mcc.GetDeletionTimestamp().IsZero() {
+			continue
+		}
+		if canList {
+			count++
+			continue
+		}
+		ok, err := m.canGetManagementClusterClassifier(mcc.Name, user)
 		if err != nil {
 			continue
 		}

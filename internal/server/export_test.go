@@ -95,6 +95,14 @@ var (
 	GetEventClusterDetails = getEventClusterDetails
 
 	GetProfileData = getProfileData
+
+	MatchingClustersFromClassifierReports                  = matchingClustersFromClassifierReports
+	MatchingClustersFromManagementClusterClassifierReports = matchingClustersFromManagementClusterClassifierReports
+	ClassifierReportsMatchCluster                          = classifierReportsMatchCluster
+	ManagementClusterClassifierReportsMatchCluster         = managementClusterClassifierReportsMatchCluster
+	CountMatchingClassifierReports                         = countMatchingClassifierReports
+	CountMatchingManagementClusterClassifierReports        = countMatchingManagementClusterClassifierReports
+	ClassifierNameMatches                                  = classifierNameMatches
 )
 
 var (
@@ -102,7 +110,8 @@ var (
 )
 
 type (
-	ProfileFilters = profileFilters
+	ProfileFilters    = profileFilters
+	ClassifierFilters = classifierFilters
 )
 
 func GetNamespaceFilter(f clusterFilters) string {
