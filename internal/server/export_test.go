@@ -19,8 +19,27 @@ package server
 import (
 	"context"
 
+	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
+
+// NewTestInstance builds a standalone *instance for tests that need a specific client, bypassing
+// the InitializeManagerInstance singleton (which only ever initializes once per test binary, so
+// it cannot be used to inject per-test fixtures for client-dependent methods).
+func NewTestInstance(c client.Client, logger logr.Logger) *instance {
+	return &instance{client: c, logger: logger}
+}
+
+// GetHelmChartsForCluster exposes the unexported getHelmChartsForCluster for tests, always
+// passing no release filters.
+func (m *instance) GetHelmChartsForCluster(ctx context.Context, namespace, name string,
+	clusterType libsveltosv1beta1.ClusterType) ([]HelmRelease, error) {
+
+	return m.getHelmChartsForCluster(ctx, namespace, name, clusterType, nil)
+}
 
 // Accessors for the private clusterCounts struct, used by external test packages.
 func (cc clusterCounts) CAPITotal() int       { return cc.capiTotal }
@@ -107,6 +126,7 @@ var (
 
 var (
 	GetClusterFiltersFromQuery = getClusterFiltersFromQuery
+	AbortMCPError              = abortMCPError
 )
 
 type (

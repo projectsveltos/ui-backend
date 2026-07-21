@@ -8,6 +8,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -86,7 +87,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(clusterSummary *configv1beta1
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	_, err := ctrl.NewControllerManagedBy(mgr).
-		For(&configv1beta1.ClusterSummary{}).
+		For(&configv1beta1.ClusterSummary{}, builder.WithPredicates(ClusterSummaryPredicate{})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).

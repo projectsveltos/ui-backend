@@ -40,6 +40,13 @@ const (
 	apiVersionKey           = "apiVersion"
 )
 
+var (
+	// ErrMCPServerUnavailable indicates the MCP server could not be reached (e.g. it is not
+	// deployed, or its Service has no endpoints yet). Callers can use errors.Is to distinguish
+	// this from errors returned by the MCP tools themselves.
+	ErrMCPServerUnavailable = errors.New("mcp server is not available")
+)
+
 // contentToString renders MCP tool result content (typically a single TextContent block
 // describing an error) as a human-readable string. mcp.Content is an interface with no
 // String() method, so formatting it directly with %v prints pointer addresses instead of
@@ -72,7 +79,7 @@ func connect(ctx context.Context, url string, logger logr.Logger) (*mcp.ClientSe
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: url}, nil)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to connect: %v", err))
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", ErrMCPServerUnavailable, err)
 	}
 
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("Connected to server (session ID: %s)", session.ID()))

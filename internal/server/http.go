@@ -788,7 +788,7 @@ var (
 		result, err := mcpclient.CheckInstallation(c.Request.Context(), getMCPServerURL(), ginLogger)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check installation status: %v", err))
-			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			abortMCPError(c, err)
 			return
 		}
 
@@ -901,7 +901,7 @@ var (
 			clusterRef, profileRef, ginLogger)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check profile deployment status: %v", err))
-			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			abortMCPError(c, err)
 			return
 		}
 
@@ -951,7 +951,7 @@ var (
 			clusterRef, ginLogger)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check profile deployment errors: %v", err))
-			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			abortMCPError(c, err)
 			return
 		}
 
@@ -1177,11 +1177,12 @@ func getManagedClusterData(clusters map[corev1.ObjectReference]ClusterInfo, filt
 		}
 
 		data = append(data, ManagedCluster{
-			Namespace:      k.Namespace,
-			Name:           k.Name,
-			ClusterInfo:    clusters[k],
-			HasIssues:      manager.ClusterHasIssues(clusterType, k.Namespace, k.Name),
-			IsProvisioning: manager.ClusterIsProvisioning(clusterType, k.Namespace, k.Name),
+			Namespace:             k.Namespace,
+			Name:                  k.Name,
+			ClusterInfo:           clusters[k],
+			HasIssues:             manager.ClusterHasIssues(clusterType, k.Namespace, k.Name),
+			IsProvisioning:        manager.ClusterIsProvisioning(clusterType, k.Namespace, k.Name),
+			HasOutdatedHelmCharts: manager.ClusterHasOutdatedHelmCharts(clusterType, k.Namespace, k.Name),
 		})
 	}
 
@@ -1342,6 +1343,17 @@ func getClusterFromQuery(c *gin.Context) (namespace, name string, clusterType li
 	return
 }
 
+// abortMCPError aborts the request for an error returned by an mcpclient call. If the MCP
+// server itself could not be reached (e.g. it is not deployed), it responds with 503 instead
+// of the generic 500 used for other failures, so the dashboard can show a clear message.
+func abortMCPError(c *gin.Context, err error) {
+	if errors.Is(err, mcpclient.ErrMCPServerUnavailable) {
+		_ = c.AbortWithError(http.StatusServiceUnavailable, err)
+		return
+	}
+	_ = c.AbortWithError(http.StatusInternalServerError, err)
+}
+
 // analyzePipelineFunc matches mcpclient.AnalyzeEventPipeline/AnalyzeClassifierPipeline: trace
 // a pipeline for one resource/cluster pair and return the issues detected.
 type analyzePipelineFunc func(ctx context.Context, url string, clusterRef *corev1.ObjectReference,
@@ -1392,7 +1404,7 @@ func handleAnalyzePipeline(c *gin.Context, resourceQueryParam string, analyze an
 	result, err := analyze(c.Request.Context(), getMCPServerURL(), clusterRef, resourceName, ginLogger)
 	if err != nil {
 		ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to analyze pipeline: %v", err))
-		_ = c.AbortWithError(http.StatusInternalServerError, err)
+		abortMCPError(c, err)
 		return
 	}
 

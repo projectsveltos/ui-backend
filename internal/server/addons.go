@@ -28,6 +28,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
 type HelmRelease struct {
@@ -55,6 +56,22 @@ type HelmRelease struct {
 	// ProfileName is the name of the ClusterProfile/Profile that
 	// caused the helm chart to be deployed
 	ProfileName string `json:"profileName"`
+
+	// LatestVersion is the highest version currently published upstream for this chart, only
+	// set when it is newer than ChartVersion. Populated by addon-controller's periodic
+	// outdated-Helm-chart check, independent of this release's own deployment status.
+	// +optional
+	LatestVersion string `json:"latestVersion,omitempty"`
+
+	// LatestPatchVersion is the highest published version sharing ChartVersion's major/minor
+	// line, only set when it is newer than ChartVersion.
+	// +optional
+	LatestPatchVersion string `json:"latestPatchVersion,omitempty"`
+
+	// LastCheckedTime is when LatestVersion/LatestPatchVersion were last evaluated. Absent
+	// means this release has not been checked yet.
+	// +optional
+	LastCheckedTime *metav1.Time `json:"lastCheckedTime,omitempty"`
 }
 
 type Resource struct {
@@ -127,7 +144,76 @@ func (m *instance) getHelmChartsForCluster(ctx context.Context, namespace, name 
 
 	// Only one returned
 	cc := &clusterConfigurations.Items[0]
-	return getHelmReleases(cc, helmFilters), nil
+	releases := getHelmReleases(cc, helmFilters)
+
+	outdatedInfo, err := m.getOutdatedHelmChartInfo(ctx, namespace, name, clusterType)
+	if err != nil {
+		// Best-effort: outdated-version info is an enrichment, not core deployment data.
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list ClusterSummaries for outdated Helm chart info: %v", err))
+		return releases, nil
+	}
+
+	for i := range releases {
+		info, ok := outdatedInfo[getHelmReleaseKey(releases[i].Namespace, releases[i].ReleaseName)]
+		if !ok {
+			continue
+		}
+		releases[i].LatestVersion = info.latestVersion
+		releases[i].LatestPatchVersion = info.latestPatchVersion
+		releases[i].LastCheckedTime = info.lastCheckedTime
+	}
+
+	return releases, nil
+}
+
+// outdatedHelmChartInfo mirrors the subset of HelmChartSummary reporting the outcome of
+// addon-controller's periodic outdated-Helm-chart check.
+type outdatedHelmChartInfo struct {
+	latestVersion      string
+	latestPatchVersion string
+	lastCheckedTime    *metav1.Time
+}
+
+// getOutdatedHelmChartInfo lists every ClusterSummary for the cluster and returns a map, keyed
+// by "<releaseNamespace>/<releaseName>", of outdated-version info from each actively-managed
+// (Status == Managing) HelmChartSummary entry.
+func (m *instance) getOutdatedHelmChartInfo(ctx context.Context, namespace, name string,
+	clusterType libsveltosv1beta1.ClusterType) (map[string]outdatedHelmChartInfo, error) {
+
+	clusterSummaries := &configv1beta1.ClusterSummaryList{}
+	listOptions := []client.ListOption{
+		client.InNamespace(namespace),
+		client.MatchingLabels{
+			configv1beta1.ClusterNameLabel: name,
+			configv1beta1.ClusterTypeLabel: string(clusterType),
+		},
+	}
+
+	if err := m.client.List(ctx, clusterSummaries, listOptions...); err != nil {
+		return nil, err
+	}
+
+	result := map[string]outdatedHelmChartInfo{}
+	for i := range clusterSummaries.Items {
+		cs := &clusterSummaries.Items[i]
+		for j := range cs.Status.HelmReleaseSummaries {
+			rs := &cs.Status.HelmReleaseSummaries[j]
+			if rs.Status != configv1beta1.HelmChartStatusManaging {
+				continue
+			}
+
+			info := outdatedHelmChartInfo{lastCheckedTime: rs.LastCheckedTime}
+			if rs.LatestVersion != nil {
+				info.latestVersion = *rs.LatestVersion
+			}
+			if rs.LatestPatchVersion != nil {
+				info.latestPatchVersion = *rs.LatestPatchVersion
+			}
+			result[getHelmReleaseKey(rs.ReleaseNamespace, rs.ReleaseName)] = info
+		}
+	}
+
+	return result, nil
 }
 
 func (m *instance) getResourcesForCluster(ctx context.Context, namespace, name string,
@@ -323,6 +409,12 @@ func addDeployedResourcesForFeature(profileName string, resourceFilters *resourc
 			results[*resource] = []string{profileName}
 		}
 	}
+}
+
+// getHelmReleaseKey returns the join key used to match a HelmRelease (from ClusterConfiguration)
+// to its outdatedHelmChartInfo (from ClusterSummary).
+func getHelmReleaseKey(releaseNamespace, releaseName string) string {
+	return fmt.Sprintf("%s/%s", releaseNamespace, releaseName)
 }
 
 func getSliceInRange[T any](items []T, limit, skip int) ([]T, error) {
