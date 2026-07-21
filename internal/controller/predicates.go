@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -126,4 +127,50 @@ func (p ClusterStatusPredicate) Update(e event.UpdateEvent) bool {
 	oldPaused := ptr.Deref(oldCluster.Spec.Paused, false)
 	newPaused := ptr.Deref(newCluster.Spec.Paused, false)
 	return oldPaused != newPaused
+}
+
+// ClusterSummaryPredicate is a custom predicate that triggers reconciliation on generation
+// changes (Spec, i.e. which profile/cluster this ClusterSummary is for) or when any of the
+// ClusterSummary.Status fields this package's cache actually reads change: FeatureSummaries,
+// Dependencies, or HelmReleaseSummaries. This deliberately ignores the rest of
+// ClusterSummary.Status (DeployedGVKs, NextReconcileTime, top-level FailureMessage,
+// ReconciliationSuspended, SuspensionReason) since nothing in this package consumes them.
+//
+// HelmReleaseSummaries is compared as a whole slice, which does not filter out a pass where
+// addon-controller's periodic outdated-Helm-chart checker only advances LastCheckedTime without
+// changing LatestVersion/LatestPatchVersion -- accepted as a simplification, since that field is
+// exactly the one this predicate exists to notice changing.
+type ClusterSummaryPredicate struct {
+	predicate.GenerationChangedPredicate
+}
+
+// Update implements Predicate.
+func (p ClusterSummaryPredicate) Update(e event.UpdateEvent) bool {
+	// A generation change indicates a change in the spec, which should always trigger a reconcile.
+	if p.GenerationChangedPredicate.Update(e) {
+		return true
+	}
+
+	oldClusterSummary, ok := e.ObjectOld.(*configv1beta1.ClusterSummary)
+	if !ok {
+		return false
+	}
+	newClusterSummary, ok := e.ObjectNew.(*configv1beta1.ClusterSummary)
+	if !ok {
+		return false
+	}
+
+	if oldClusterSummary.DeletionTimestamp.IsZero() && !newClusterSummary.DeletionTimestamp.IsZero() {
+		return true
+	}
+
+	if !reflect.DeepEqual(oldClusterSummary.Status.FeatureSummaries, newClusterSummary.Status.FeatureSummaries) {
+		return true
+	}
+
+	if !reflect.DeepEqual(oldClusterSummary.Status.Dependencies, newClusterSummary.Status.Dependencies) {
+		return true
+	}
+
+	return !reflect.DeepEqual(oldClusterSummary.Status.HelmReleaseSummaries, newClusterSummary.Status.HelmReleaseSummaries)
 }

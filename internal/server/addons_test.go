@@ -17,6 +17,7 @@ limitations under the License.
 package server_test
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"time"
@@ -25,7 +26,12 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/klog/v2/textlogger"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/ui-backend/internal/server"
 )
 
@@ -222,5 +228,135 @@ var _ = Describe("Deployed Addons and Applications", func() {
 
 			Expect(helmReleases[i].Namespace < helmReleases[i+1].Namespace).To(BeTrue())
 		}
+	})
+
+	It("getHelmChartsForCluster joins outdated-version info from ClusterSummary", func() {
+		namespace := randomString()
+		clusterName := randomString()
+		clusterType := libsveltosv1beta1.ClusterTypeCapi
+		profileName := randomString()
+		releaseName := randomString()
+		releaseNamespace := randomString()
+		chartVersion := testChartVersionBase
+		latest := testLatestVersion
+		latestPatch := "1.0.1"
+		lastChecked := metav1.Now()
+
+		clusterConfig := &configv1beta1.ClusterConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: namespace,
+				Labels: map[string]string{
+					configv1beta1.ClusterNameLabel: clusterName,
+					configv1beta1.ClusterTypeLabel: string(clusterType),
+				},
+			},
+			Status: configv1beta1.ClusterConfigurationStatus{
+				ClusterProfileResources: []configv1beta1.ClusterProfileResource{
+					{
+						ClusterProfileName: profileName,
+						Features: []configv1beta1.Feature{
+							{
+								FeatureID: libsveltosv1beta1.FeatureHelm,
+								Charts: []configv1beta1.Chart{
+									{
+										ReleaseName:  releaseName,
+										Namespace:    releaseNamespace,
+										ChartVersion: chartVersion,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: namespace,
+				Labels: map[string]string{
+					configv1beta1.ClusterNameLabel: clusterName,
+					configv1beta1.ClusterTypeLabel: string(clusterType),
+				},
+			},
+			Status: configv1beta1.ClusterSummaryStatus{
+				HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+					{
+						ReleaseName: releaseName, ReleaseNamespace: releaseNamespace,
+						Status:             configv1beta1.HelmChartStatusManaging,
+						LatestVersion:      &latest,
+						LatestPatchVersion: &latestPatch,
+						LastCheckedTime:    &lastChecked,
+					},
+				},
+			},
+		}
+
+		initObjects := []client.Object{clusterConfig, clusterSummary}
+		c := fake.NewClientBuilder().WithScheme(scheme).
+			WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		m := server.NewTestInstance(c, logger)
+
+		releases, err := m.GetHelmChartsForCluster(context.TODO(), namespace, clusterName, clusterType)
+		Expect(err).To(BeNil())
+		Expect(releases).To(HaveLen(1))
+		Expect(releases[0].LatestVersion).To(Equal(latest))
+		Expect(releases[0].LatestPatchVersion).To(Equal(latestPatch))
+		Expect(releases[0].LastCheckedTime).ToNot(BeNil())
+	})
+
+	It("getHelmChartsForCluster leaves outdated-version fields empty when release is up to date", func() {
+		namespace := randomString()
+		clusterName := randomString()
+		clusterType := libsveltosv1beta1.ClusterTypeCapi
+		profileName := randomString()
+		releaseName := randomString()
+		releaseNamespace := randomString()
+
+		clusterConfig := &configv1beta1.ClusterConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: namespace,
+				Labels: map[string]string{
+					configv1beta1.ClusterNameLabel: clusterName,
+					configv1beta1.ClusterTypeLabel: string(clusterType),
+				},
+			},
+			Status: configv1beta1.ClusterConfigurationStatus{
+				ClusterProfileResources: []configv1beta1.ClusterProfileResource{
+					{
+						ClusterProfileName: profileName,
+						Features: []configv1beta1.Feature{
+							{
+								FeatureID: libsveltosv1beta1.FeatureHelm,
+								Charts: []configv1beta1.Chart{
+									{ReleaseName: releaseName, Namespace: releaseNamespace, ChartVersion: testChartVersionBase},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// No ClusterSummary at all for this cluster: outdated info lookup should be a no-op,
+		// not an error, and the release should still be returned.
+		initObjects := []client.Object{clusterConfig}
+		c := fake.NewClientBuilder().WithScheme(scheme).
+			WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		m := server.NewTestInstance(c, logger)
+
+		releases, err := m.GetHelmChartsForCluster(context.TODO(), namespace, clusterName, clusterType)
+		Expect(err).To(BeNil())
+		Expect(releases).To(HaveLen(1))
+		Expect(releases[0].LatestVersion).To(BeEmpty())
+		Expect(releases[0].LatestPatchVersion).To(BeEmpty())
+		Expect(releases[0].LastCheckedTime).To(BeNil())
 	})
 })

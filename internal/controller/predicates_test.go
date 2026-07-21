@@ -25,8 +25,14 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/ui-backend/internal/controller"
+)
+
+const (
+	testReleaseName      = "r1"
+	testReleaseNamespace = "ns1"
 )
 
 var _ = Describe("SveltosClusterPredicate", func() {
@@ -260,5 +266,131 @@ var _ = Describe("ClusterStatusPredicate", func() {
 		}
 
 		Expect(clusterStatusPredicate.Update(e)).To(BeTrue())
+	})
+})
+
+var _ = Describe("ClusterSummaryPredicate", func() {
+	var clusterSummary *configv1beta1.ClusterSummary
+	var oldClusterSummary *configv1beta1.ClusterSummary
+
+	BeforeEach(func() {
+		clusterSummary = &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:  randomString(),
+				Name:       randomString(),
+				Generation: 1,
+			},
+		}
+		oldClusterSummary = clusterSummary.DeepCopy()
+	})
+
+	It("Create returns true", func() {
+		clusterSummaryPredicate := controller.ClusterSummaryPredicate{}
+
+		e := event.CreateEvent{
+			Object: clusterSummary,
+		}
+
+		Expect(clusterSummaryPredicate.Create(e)).To(BeTrue())
+	})
+
+	It("Delete returns true", func() {
+		clusterSummaryPredicate := controller.ClusterSummaryPredicate{}
+
+		e := event.DeleteEvent{
+			Object: clusterSummary,
+		}
+
+		Expect(clusterSummaryPredicate.Delete(e)).To(BeTrue())
+	})
+
+	It("Update returns false when nothing relevant has changed", func() {
+		clusterSummaryPredicate := controller.ClusterSummaryPredicate{}
+
+		e := event.UpdateEvent{
+			ObjectNew: clusterSummary,
+			ObjectOld: oldClusterSummary,
+		}
+
+		Expect(clusterSummaryPredicate.Update(e)).To(BeFalse())
+	})
+
+	It("Update returns false when only LastCheckedTime advances with no version change", func() {
+		clusterSummaryPredicate := controller.ClusterSummaryPredicate{}
+
+		checkedAt := metav1.Now()
+		oldClusterSummary.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{ReleaseName: testReleaseName, ReleaseNamespace: testReleaseNamespace, Status: configv1beta1.HelmChartStatusManaging},
+		}
+		clusterSummary.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{ReleaseName: testReleaseName, ReleaseNamespace: testReleaseNamespace, Status: configv1beta1.HelmChartStatusManaging,
+				LastCheckedTime: &checkedAt},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: clusterSummary,
+			ObjectOld: oldClusterSummary,
+		}
+
+		// This is the accepted simplification documented on ClusterSummaryPredicate: a
+		// LastCheckedTime-only change is not filtered out.
+		Expect(clusterSummaryPredicate.Update(e)).To(BeTrue())
+	})
+
+	It("Update returns true when Status.FeatureSummaries has changed", func() {
+		clusterSummaryPredicate := controller.ClusterSummaryPredicate{}
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusProvisioned},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: clusterSummary,
+			ObjectOld: oldClusterSummary,
+		}
+
+		Expect(clusterSummaryPredicate.Update(e)).To(BeTrue())
+	})
+
+	It("Update returns true when Status.Dependencies has changed", func() {
+		clusterSummaryPredicate := controller.ClusterSummaryPredicate{}
+		dependencies := "waiting on profile-a"
+		clusterSummary.Status.Dependencies = &dependencies
+
+		e := event.UpdateEvent{
+			ObjectNew: clusterSummary,
+			ObjectOld: oldClusterSummary,
+		}
+
+		Expect(clusterSummaryPredicate.Update(e)).To(BeTrue())
+	})
+
+	It("Update returns true when Status.HelmReleaseSummaries has changed", func() {
+		clusterSummaryPredicate := controller.ClusterSummaryPredicate{}
+		latest := "2.0.0"
+		clusterSummary.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{ReleaseName: testReleaseName, ReleaseNamespace: testReleaseNamespace, Status: configv1beta1.HelmChartStatusManaging,
+				LatestVersion: &latest},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: clusterSummary,
+			ObjectOld: oldClusterSummary,
+		}
+
+		Expect(clusterSummaryPredicate.Update(e)).To(BeTrue())
+	})
+
+	It("Update returns true when DeletionTimestamp transitions from zero to non-zero", func() {
+		clusterSummaryPredicate := controller.ClusterSummaryPredicate{}
+		now := metav1.Now()
+		clusterSummary.DeletionTimestamp = &now
+		clusterSummary.Finalizers = []string{"projectsveltos.io/finalizer"}
+
+		e := event.UpdateEvent{
+			ObjectNew: clusterSummary,
+			ObjectOld: oldClusterSummary,
+		}
+
+		Expect(clusterSummaryPredicate.Update(e)).To(BeTrue())
 	})
 })

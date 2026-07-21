@@ -105,7 +105,13 @@ type instance struct {
 	// (Provisioning with no failure message, or waiting for dependencies).
 	// Entry is created lazily and removed when the set becomes empty.
 	clusterProvisioning map[string]*libsveltosset.Set
-	profiles            map[corev1.ObjectReference]ProfileInfo
+	// key: same format as clusterWithIssues
+	// value: set of ClusterSummary ObjectReferences with at least one actively-managed
+	// HelmChartSummary entry whose LatestVersion or LatestPatchVersion is set (a newer
+	// version is currently published upstream). Entry is created lazily and removed when
+	// the set becomes empty.
+	clusterWithOutdatedHelmCharts map[string]*libsveltosset.Set
+	profiles                      map[corev1.ObjectReference]ProfileInfo
 }
 
 var (
@@ -122,19 +128,20 @@ func InitializeManagerInstance(ctx context.Context, config *rest.Config, c clien
 		defer lock.Unlock()
 		if managerInstance == nil {
 			managerInstance = &instance{
-				config:               config,
-				client:               c,
-				sveltosClusters:      make(map[corev1.ObjectReference]ClusterInfo),
-				capiClusters:         make(map[corev1.ObjectReference]ClusterInfo),
-				clusterSummaryReport: make(map[corev1.ObjectReference]ClusterProfileStatus),
-				clusterWithIssues:    make(map[string]*libsveltosset.Set),
-				clusterProvisioning:  make(map[string]*libsveltosset.Set),
-				profiles:             make(map[corev1.ObjectReference]ProfileInfo),
-				clusterMux:           sync.RWMutex{},
-				clusterStatusesMux:   sync.RWMutex{},
-				profileMux:           sync.RWMutex{},
-				scheme:               scheme,
-				logger:               logger,
+				config:                        config,
+				client:                        c,
+				sveltosClusters:               make(map[corev1.ObjectReference]ClusterInfo),
+				capiClusters:                  make(map[corev1.ObjectReference]ClusterInfo),
+				clusterSummaryReport:          make(map[corev1.ObjectReference]ClusterProfileStatus),
+				clusterWithIssues:             make(map[string]*libsveltosset.Set),
+				clusterProvisioning:           make(map[string]*libsveltosset.Set),
+				clusterWithOutdatedHelmCharts: make(map[string]*libsveltosset.Set),
+				profiles:                      make(map[corev1.ObjectReference]ProfileInfo),
+				clusterMux:                    sync.RWMutex{},
+				clusterStatusesMux:            sync.RWMutex{},
+				profileMux:                    sync.RWMutex{},
+				scheme:                        scheme,
+				logger:                        logger,
 			}
 
 			go func() {
@@ -371,6 +378,7 @@ func (m *instance) AddClusterProfileStatus(summary *configv1beta1.ClusterSummary
 	m.clusterSummaryReport[*csRef] = clusterProfileStatus
 	m.updateClusterWithIssues(clusterKey, csRef, clusterSummaryHasIssues(clusterFeatureSummaries))
 	m.updateClusterProvisioning(clusterKey, csRef, clusterSummaryIsProvisioning(clusterFeatureSummaries, dependencies))
+	m.updateClusterWithOutdatedHelmCharts(clusterKey, csRef, clusterSummaryHasOutdatedHelmCharts(summary.Status.HelmReleaseSummaries))
 }
 
 func (m *instance) RemoveClusterProfileStatus(summaryNamespace, summaryName string) {
@@ -388,6 +396,7 @@ func (m *instance) RemoveClusterProfileStatus(summaryNamespace, summaryName stri
 		clusterKey := clusterIssuesKey(existing.ClusterType, existing.Namespace, existing.ClusterName)
 		m.updateClusterWithIssues(clusterKey, csRef, false)
 		m.updateClusterProvisioning(clusterKey, csRef, false)
+		m.updateClusterWithOutdatedHelmCharts(clusterKey, csRef, false)
 	}
 
 	delete(m.clusterSummaryReport, *csRef)
@@ -520,6 +529,51 @@ func (m *instance) updateClusterProvisioning(clusterKey string, csRef *corev1.Ob
 			set.Erase(csRef)
 			if set.Len() == 0 {
 				delete(m.clusterProvisioning, clusterKey)
+			}
+		}
+	}
+}
+
+// ClusterHasOutdatedHelmCharts returns true if the cluster has at least one actively-managed
+// Helm chart for which a newer version (or a newer same-minor patch) is currently published
+// upstream, per addon-controller's periodic check.
+func (m *instance) ClusterHasOutdatedHelmCharts(clusterType libsveltosv1beta1.ClusterType, clusterNamespace, clusterName string) bool {
+	m.clusterStatusesMux.RLock()
+	defer m.clusterStatusesMux.RUnlock()
+
+	key := clusterIssuesKey(clusterType, clusterNamespace, clusterName)
+	set, ok := m.clusterWithOutdatedHelmCharts[key]
+	return ok && set.Len() > 0
+}
+
+// clusterSummaryHasOutdatedHelmCharts returns true if any actively-managed (Status == Managing)
+// HelmChartSummary entry has LatestVersion or LatestPatchVersion set.
+func clusterSummaryHasOutdatedHelmCharts(helmReleaseSummaries []configv1beta1.HelmChartSummary) bool {
+	for i := range helmReleaseSummaries {
+		rs := &helmReleaseSummaries[i]
+		if rs.Status != configv1beta1.HelmChartStatusManaging {
+			continue
+		}
+		if rs.LatestVersion != nil || rs.LatestPatchVersion != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// updateClusterWithOutdatedHelmCharts inserts or erases csRef from the per-cluster outdated-Helm-
+// chart set. Must be called with clusterStatusesMux held for writing.
+func (m *instance) updateClusterWithOutdatedHelmCharts(clusterKey string, csRef *corev1.ObjectReference, hasOutdated bool) {
+	if hasOutdated {
+		if m.clusterWithOutdatedHelmCharts[clusterKey] == nil {
+			m.clusterWithOutdatedHelmCharts[clusterKey] = &libsveltosset.Set{}
+		}
+		m.clusterWithOutdatedHelmCharts[clusterKey].Insert(csRef)
+	} else {
+		if set, ok := m.clusterWithOutdatedHelmCharts[clusterKey]; ok {
+			set.Erase(csRef)
+			if set.Len() == 0 {
+				delete(m.clusterWithOutdatedHelmCharts, clusterKey)
 			}
 		}
 	}

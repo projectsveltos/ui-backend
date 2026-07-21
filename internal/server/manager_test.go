@@ -44,6 +44,11 @@ const (
 	k8sVersion         = "v1.29.0"
 	helmFeatureID      = "Helm"
 	resourcesFeatureID = "Resources"
+
+	testOutdatedReleaseName      = "r1"
+	testOutdatedReleaseNamespace = "ns1"
+	testChartVersionBase         = "1.0.0"
+	testLatestVersion            = "2.0.0"
 )
 
 func randomPort() string {
@@ -557,6 +562,98 @@ var _ = Describe("Manager", func() {
 		cs2.Status.FeatureSummaries[0].Status = libsveltosv1beta1.FeatureStatusProvisioned
 		manager.AddClusterProfileStatus(cs2)
 		Expect(manager.ClusterHasIssues(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
+	It("ClusterHasOutdatedHelmCharts returns true when a Managing release has LatestVersion set", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		latest := testLatestVersion
+		cs := createTestClusterSummary("cs-outdated", cluster.Namespace, cluster.Namespace, cluster.Name, nil)
+		cs.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{ReleaseName: testOutdatedReleaseName, ReleaseNamespace: testOutdatedReleaseNamespace, Status: configv1beta1.HelmChartStatusManaging,
+				LatestVersion: &latest},
+		}
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterHasOutdatedHelmCharts(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+	})
+
+	It("ClusterHasOutdatedHelmCharts returns true when a Managing release has LatestPatchVersion set", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		latestPatch := "1.2.4"
+		cs := createTestClusterSummary("cs-patch-outdated", cluster.Namespace, cluster.Namespace, cluster.Name, nil)
+		cs.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{ReleaseName: testOutdatedReleaseName, ReleaseNamespace: testOutdatedReleaseNamespace, Status: configv1beta1.HelmChartStatusManaging,
+				LatestPatchVersion: &latestPatch},
+		}
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterHasOutdatedHelmCharts(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+	})
+
+	It("ClusterHasOutdatedHelmCharts returns false when no release has a newer version", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		checkedAt := metav1.Now()
+		cs := createTestClusterSummary("cs-up-to-date", cluster.Namespace, cluster.Namespace, cluster.Name, nil)
+		cs.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{ReleaseName: testOutdatedReleaseName, ReleaseNamespace: testOutdatedReleaseNamespace, Status: configv1beta1.HelmChartStatusManaging,
+				LastCheckedTime: &checkedAt},
+		}
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterHasOutdatedHelmCharts(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
+	It("ClusterHasOutdatedHelmCharts ignores a Conflict-status entry with LatestVersion set", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		latest := testLatestVersion
+		cs := createTestClusterSummary("cs-conflict-outdated", cluster.Namespace, cluster.Namespace, cluster.Name, nil)
+		cs.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{ReleaseName: testOutdatedReleaseName, ReleaseNamespace: testOutdatedReleaseNamespace, Status: configv1beta1.HelmChartStatusConflict,
+				LatestVersion: &latest},
+		}
+		manager.AddClusterProfileStatus(cs)
+
+		Expect(manager.ClusterHasOutdatedHelmCharts(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
+	})
+
+	It("ClusterHasOutdatedHelmCharts clears when the ClusterSummary is removed", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		manager := server.GetManagerInstance()
+
+		latest := testLatestVersion
+		cs := createTestClusterSummary("cs-outdated-remove", cluster.Namespace, cluster.Namespace, cluster.Name, nil)
+		cs.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{ReleaseName: testOutdatedReleaseName, ReleaseNamespace: testOutdatedReleaseNamespace, Status: configv1beta1.HelmChartStatusManaging,
+				LatestVersion: &latest},
+		}
+		manager.AddClusterProfileStatus(cs)
+		Expect(manager.ClusterHasOutdatedHelmCharts(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeTrue())
+
+		manager.RemoveClusterProfileStatus(cs.Namespace, cs.Name)
+		Expect(manager.ClusterHasOutdatedHelmCharts(libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name)).To(BeFalse())
 	})
 
 	It("ClusterIsProvisioning returns true when a ClusterSummary is cleanly Provisioning", func() {

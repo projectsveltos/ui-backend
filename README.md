@@ -1,5 +1,6 @@
 [![CI](https://github.com/projectsveltos/ui-backend/actions/workflows/main.yaml/badge.svg)](https://github.com/projectsveltos/ui-backend/actions)
-[![Go Report Card](https://goreportcard.com/badge/github.com/projectsveltos/ui-backend)](https://goreportcard.com/report/github.com/projectsveltos/ui-backend)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/projectsveltos/ui-backend/badge)](https://scorecard.dev/viewer/?uri=github.com/projectsveltos/ui-backend)
+[![CodeQL](https://github.com/projectsveltos/ui-backend/actions/workflows/codeql.yaml/badge.svg)](https://github.com/projectsveltos/ui-backend/actions/workflows/codeql.yaml)
 [![Release](https://img.shields.io/github/v/release/projectsveltos/ui-backend)](https://github.com/projectsveltos/ui-backend/releases)
 [![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)
 [![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q)
@@ -479,6 +480,147 @@ When the controller has not yet generated a ClusterReport for the profile+cluste
   "hasChanges": false,
   "reportMissing": true
 }
+```
+
+### MCP-backed endpoints
+
+The endpoints below delegate to the `mcp-server` (deployed as `mcp-server.projectsveltos` in the management cluster) to analyze deployment state using the Sveltos MCP tools. If `mcp-server` is not deployed, or cannot be reached, these endpoints return `503 Service Unavailable` instead of a result.
+
+#### Check Sveltos Installation
+
+```/installation```
+
+Verifies that the Sveltos components are correctly installed. No query parameters are required.
+
+```
+http://localhost:9000/installation
+```
+
+returns
+
+```json
+{
+  "is_correctly_installed": true,
+  "details": []
+}
+```
+
+#### Debug Profile Deployment on a Cluster
+
+```/debugProfileCluster?namespace=<cluster-namespace>&clusterName=<cluster-name>&clusterType=<cluster-type>&profileName=<profile-name>&profileKind=<profile-kind>```
+
+Analyzes why a specific ClusterProfile/Profile is failing to deploy on a specific cluster, and returns the causes.
+
+Required query parameters:
+
+- `namespace` => namespace of the target cluster
+- `clusterName` => name of the target cluster
+- `clusterType` => cluster type: __capi__ for ClusterAPI powered clusters or __sveltos__ for SveltosClusters
+- `profileName` => name of the profile
+- `profileKind` => kind of the profile: `ClusterProfile` or `Profile`
+
+For instance:
+
+```
+http://localhost:9000/debugProfileCluster?namespace=default&clusterName=clusterapi-workload&clusterType=capi&profileName=deploy-kyverno&profileKind=ClusterProfile
+```
+
+returns
+
+```json
+{
+  "profileName": "deploy-kyverno",
+  "profileKind": "ClusterProfile",
+  "isSuccessful": false,
+  "causes": [
+    "cannot manage chart kyverno/kyverno-latest. ClusterSummary deploy-kyverno-capi-clusterapi-workload managing it."
+  ]
+}
+```
+
+#### Debug All Deployments on a Cluster
+
+```/debugCluster?namespace=<cluster-namespace>&name=<cluster-name>&type=<cluster-type>```
+
+Analyzes every profile deployed on a cluster and returns the ones currently failing.
+
+Required query parameters:
+
+- `namespace` => namespace of the target cluster
+- `name` => name of the target cluster
+- `type` => cluster type: __capi__ for ClusterAPI powered clusters or __sveltos__ for SveltosClusters
+
+For instance:
+
+```
+http://localhost:9000/debugCluster?namespace=default&name=clusterapi-workload&type=capi
+```
+
+returns
+
+```json
+{
+  "failedProfiles": [
+    {
+      "profileName": "deploy-kyverno",
+      "profileKind": "ClusterProfile",
+      "isSuccessful": false,
+      "causes": [
+        "cannot manage chart kyverno/kyverno-latest. ClusterSummary deploy-kyverno-capi-clusterapi-workload managing it."
+      ]
+    }
+  ]
+}
+```
+
+#### Analyze EventTrigger Pipeline
+
+```/analyzeEventPipeline?namespace=<cluster-namespace>&name=<cluster-name>&type=<cluster-type>&event_name=<eventTrigger-name>```
+
+Traces the full deployment pipeline for an EventTrigger against a cluster and returns any issues detected.
+
+Required query parameters:
+
+- `namespace` => namespace of the target cluster
+- `name` => name of the target cluster
+- `type` => cluster type: __capi__ for ClusterAPI powered clusters or __sveltos__ for SveltosClusters
+- `event_name` => name of the EventTrigger
+
+For instance:
+
+```
+http://localhost:9000/analyzeEventPipeline?namespace=default&name=clusterapi-workload&type=capi&event_name=service-network-policy
+```
+
+returns
+
+```json
+[]
+```
+
+#### Analyze Classifier Pipeline
+
+```/analyzeClassifierPipeline?namespace=<cluster-namespace>&name=<cluster-name>&type=<cluster-type>&classifier_name=<classifier-name>```
+
+Traces the full deployment pipeline for a Classifier/ManagementClusterClassifier against a cluster and returns any issues detected.
+
+Required query parameters:
+
+- `namespace` => namespace of the target cluster
+- `name` => name of the target cluster
+- `type` => cluster type: __capi__ for ClusterAPI powered clusters or __sveltos__ for SveltosClusters
+- `classifier_name` => name of the Classifier/ManagementClusterClassifier
+
+For instance:
+
+```
+http://localhost:9000/analyzeClassifierPipeline?namespace=default&name=clusterapi-workload&type=capi&classifier_name=default-classifier
+```
+
+returns
+
+```json
+[]
 ```
 
 ### Get Sveltos Stats
