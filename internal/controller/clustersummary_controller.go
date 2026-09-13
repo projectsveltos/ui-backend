@@ -45,13 +45,14 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		)
 	}
 
-	// Handle deleted ClusterSummary
-	if !clusterSummary.DeletionTimestamp.IsZero() {
-		r.removeClusterSummary(clusterSummary.Namespace, clusterSummary.Name, logger)
-	} else {
-		// Handle non-deleted ClusterSummary
-		r.reconcileNormal(clusterSummary, logger)
-	}
+	// A non-zero DeletionTimestamp only means removal has been requested, not that it has
+	// happened: a finalizer (DependsOn dependents still present, or a TransitionFrom
+	// successor not yet Provisioned) can hold this object alive, reporting a real status
+	// (e.g. Blocked), for as long as that condition lasts. Only actual absence (NotFound,
+	// handled above) means this ClusterSummary is really gone; while the object still
+	// exists, keep reflecting its current status instead of dropping it from the cache
+	// the instant deletion is requested.
+	r.reconcileNormal(clusterSummary, logger)
 
 	return reconcile.Result{}, nil
 }
