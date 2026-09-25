@@ -88,7 +88,21 @@ type EventTriggerInfo struct {
 }
 
 type instance struct {
-	config             *rest.Config
+	config *rest.Config
+	// oidcProxyHost, when non-empty, is the host (scheme://host:port) of an OIDC-aware
+	// authenticating proxy (e.g. kube-oidc-proxy) that sits in front of the API server.
+	// getKubernetesRestConfig sends the dashboard user's own bearer token here instead of
+	// config.Host. Those are the only two flows that ever carry that token: identity
+	// resolution in getUserFromToken/validateToken, and impersonated writes in
+	// getImpersonatedClient.
+	// Every other call (the manager's own watches, m.client reads, and the canList*/canGet*
+	// SubjectAccessReview checks) keeps using config directly: they authenticate as this
+	// manager's own ServiceAccount, whose token the proxy isn't configured to trust.
+	oidcProxyHost string
+	// oidcProxyCAFile is the PEM CA bundle used to verify oidcProxyHost's TLS certificate.
+	// Ignored when oidcProxyHost is empty. Left empty, the system's default trust store is
+	// used instead of pinning to a specific CA.
+	oidcProxyCAFile    string
 	client             client.Client
 	scheme             *runtime.Scheme
 	clusterMux         sync.RWMutex // use a Mutex to update managed Clusters
@@ -156,6 +170,21 @@ func InitializeManagerInstance(ctx context.Context, config *rest.Config, c clien
 
 func GetManagerInstance() *instance {
 	return managerInstance
+}
+
+// SetOIDCProxyConfig configures the OIDC-aware proxy (e.g. kube-oidc-proxy) that
+// getKubernetesRestConfig routes the dashboard user's own bearer token to. Must be called
+// after InitializeManagerInstance. A no-op (falling back to config.Host and the API server's
+// own CA) when host is left empty, which is the default when no proxy is in front of the
+// API server.
+func SetOIDCProxyConfig(host, caFile string) {
+	lock.Lock()
+	defer lock.Unlock()
+	if managerInstance == nil {
+		return
+	}
+	managerInstance.oidcProxyHost = host
+	managerInstance.oidcProxyCAFile = caFile
 }
 
 const (

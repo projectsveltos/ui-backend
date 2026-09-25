@@ -71,6 +71,8 @@ var (
 	healthAddr           string
 	profilerAddress      string
 	httpPort             string
+	oidcProxyHost        string
+	oidcProxyCAFile      string
 )
 
 const (
@@ -160,6 +162,7 @@ func main() {
 
 	server.InitializeManagerInstance(ctx, mgr.GetConfig(), mgr.GetClient(), scheme,
 		httpPort, ctrl.Log.WithName("gin"))
+	server.SetOIDCProxyConfig(oidcProxyHost, oidcProxyCAFile)
 
 	startSveltosClusterController(mgr)
 	startClusterSummaryController(mgr)
@@ -214,6 +217,16 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&syncPeriod, "sync-period", defaultSyncPeriod*time.Minute,
 		fmt.Sprintf("The minimum interval at which watched resources are reconciled (e.g. 15m). Default: %d minutes",
 			defaultSyncPeriod))
+
+	fs.StringVar(&oidcProxyHost, "oidc-proxy-host", "",
+		"Host (scheme://host:port) of an OIDC-aware authenticating proxy (e.g. kube-oidc-proxy) sitting in front of "+
+			"the API server. When set, the dashboard user's own bearer token is sent here instead of the API server "+
+			"directly. Use this when the API server itself isn't configured for OIDC; leave unset otherwise.")
+
+	fs.StringVar(&oidcProxyCAFile, "oidc-proxy-ca-file", "",
+		"Path to a PEM CA bundle used to verify the TLS certificate presented by --oidc-proxy-host. Ignored if "+
+			"--oidc-proxy-host is unset. If left empty while --oidc-proxy-host is set, the system's default trust "+
+			"store is used instead of pinning to a specific CA.")
 }
 
 func setupChecks(mgr ctrl.Manager) {

@@ -41,6 +41,24 @@ func NewTestInstanceWithConfig(cfg *rest.Config, c client.Client, logger logr.Lo
 	return &instance{config: cfg, client: c, logger: logger}
 }
 
+// NewTestInstanceWithOIDCProxy is like NewTestInstanceWithConfig but also sets the OIDC proxy
+// host/CA file, for tests that verify getKubernetesRestConfig's routing logic (see
+// GetKubernetesRestConfig below).
+func NewTestInstanceWithOIDCProxy(cfg *rest.Config, oidcProxyHost, oidcProxyCAFile string,
+	c client.Client, logger logr.Logger,
+) *instance {
+
+	return &instance{
+		config: cfg, oidcProxyHost: oidcProxyHost, oidcProxyCAFile: oidcProxyCAFile,
+		client: c, logger: logger,
+	}
+}
+
+// GetKubernetesRestConfig exposes getKubernetesRestConfig for tests.
+func (m *instance) GetKubernetesRestConfig(token string) (*rest.Config, error) {
+	return m.getKubernetesRestConfig(token)
+}
+
 // Exports of the canList* SubjectAccessReview checks, one per resource type, for tests that
 // verify the Resource field (and Groups) sent matches a real RBAC rule (see k8s_utils_test.go).
 func (m *instance) CanListSveltosClusters(user string, groups []string) (bool, error) {
