@@ -69,7 +69,7 @@ var _ = Describe("Sveltos stats and cluster status", func() {
 			RoleRef: rbacv1.RoleRef{
 				APIGroup: rbacv1.GroupName,
 				Kind:     clusterRoleKind,
-				Name:     "cluster-admin",
+				Name:     clusterAdminClusterRoleName,
 			},
 			Subjects: []rbacv1.Subject{
 				{
@@ -102,7 +102,7 @@ var _ = Describe("Sveltos stats and cluster status", func() {
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		Byf("Port-forwarding to ui-backend-manager")
-		localPort, stopChan := portForwardToPod(uiBackendNamespace, uiBackendPodLabels, uiBackendPort)
+		localPort, stopChan := portForwardToPod(uiBackendPodLabels)
 
 		Byf("Verifying /stats reports the CAPI workload cluster and does not error " +
 			"(regression check: /stats used to 500 when Cluster API's CRDs were absent)")

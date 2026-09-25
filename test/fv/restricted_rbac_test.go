@@ -96,7 +96,7 @@ var _ = Describe("Restricted RBAC filtering", func() {
 		Expect(k8sClient.Create(context.TODO(), binding)).To(Succeed())
 
 		Byf("Port-forwarding to ui-backend-manager")
-		localPort, stopChan := portForwardToPod(uiBackendNamespace, uiBackendPodLabels, uiBackendPort)
+		localPort, stopChan := portForwardToPod(uiBackendPodLabels)
 
 		Byf("Verifying /profiles includes %s and excludes %s", visibleProfile.Name, hiddenProfile.Name)
 		Eventually(func() bool {

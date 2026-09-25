@@ -57,7 +57,7 @@ var _ = Describe("Group-based RBAC", func() {
 		token := getServiceAccountToken(namespace, saName)
 
 		Byf("Port-forwarding to ui-backend-manager")
-		localPort, stopChan := portForwardToPod(uiBackendNamespace, uiBackendPodLabels, uiBackendPort)
+		localPort, stopChan := portForwardToPod(uiBackendPodLabels)
 
 		Byf("Verifying the ServiceAccount sees no clusters before any RBAC is granted")
 		Eventually(func() bool {

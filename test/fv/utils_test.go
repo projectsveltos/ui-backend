@@ -49,6 +49,10 @@ const (
 	// RBAC-related fv tests.
 	clusterRoleKind = "ClusterRole"
 
+	// clusterAdminClusterRoleName is the built-in ClusterRole bound by every fv spec that needs
+	// a fully-privileged caller to exercise ui-backend's write path or "can list everything" path.
+	clusterAdminClusterRoleName = "cluster-admin"
+
 	// verbGet is the RBAC verb used across the RBAC-related fv tests to grant narrow,
 	// get-only access (as opposed to list-everything access).
 	verbGet = "get"
@@ -145,15 +149,16 @@ func getServiceAccountToken(namespace, name string) string {
 	return tr.Status.Token
 }
 
-// portForwardToPod opens a local port forwarded to targetPort on a Ready pod matching
-// labelSelector in namespace, mirroring what `kubectl port-forward` does. It returns the local
-// port that was picked and a stop channel; closing the stop channel tears the forward down.
-func portForwardToPod(namespace string, labelSelector map[string]string, targetPort int) (localPort int, stop chan struct{}) {
+// portForwardToPod opens a local port forwarded to uiBackendPort on a Ready pod matching
+// labelSelector in uiBackendNamespace (the only namespace/port any fv spec ever port-forwards
+// into), mirroring what `kubectl port-forward` does. It returns the local port that was picked
+// and a stop channel; closing the stop channel tears the forward down.
+func portForwardToPod(labelSelector map[string]string) (localPort int, stop chan struct{}) {
 	var podName string
 	Eventually(func() bool {
 		podList := &corev1.PodList{}
 		listOptions := []client.ListOption{
-			client.InNamespace(namespace),
+			client.InNamespace(uiBackendNamespace),
 			client.MatchingLabels(labelSelector),
 		}
 		if err := k8sClient.List(context.TODO(), podList, listOptions...); err != nil {
@@ -174,7 +179,7 @@ func portForwardToPod(namespace string, labelSelector map[string]string, targetP
 
 	req := clientset.CoreV1().RESTClient().Post().
 		Resource("pods").
-		Namespace(namespace).
+		Namespace(uiBackendNamespace).
 		Name(podName).
 		SubResource("portforward")
 
@@ -185,13 +190,13 @@ func portForwardToPod(namespace string, labelSelector map[string]string, targetP
 	out := new(bytes.Buffer)
 	errOut := new(bytes.Buffer)
 
-	forwarder, err := portforward.New(dialer, []string{fmt.Sprintf("0:%d", targetPort)}, stopChan, readyChan, out, errOut)
+	forwarder, err := portforward.New(dialer, []string{fmt.Sprintf("0:%d", uiBackendPort)}, stopChan, readyChan, out, errOut)
 	Expect(err).To(BeNil())
 
 	go func() {
 		defer GinkgoRecover()
 		if fwErr := forwarder.ForwardPorts(); fwErr != nil {
-			Byf("port-forward to %s/%s exited: %v", namespace, podName, fwErr)
+			Byf("port-forward to %s/%s exited: %v", uiBackendNamespace, podName, fwErr)
 		}
 	}()
 
