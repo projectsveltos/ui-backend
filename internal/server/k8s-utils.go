@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/rest"
 	certutil "k8s.io/client-go/util/cert"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
@@ -74,6 +75,20 @@ func (m *instance) getKubernetesRestConfig(token string) (*rest.Config, error) {
 		Host:            m.config.Host,
 		TLSClientConfig: tlsClientConfig,
 	}, nil
+}
+
+// getImpersonatedClient returns a controller-runtime client authenticated as the token's own
+// owner (token pass-through, not rest.Config.Impersonate) rather than this manager's own
+// ServiceAccount. Every create/update/delete on ClusterProfile/Profile/ConfigMap/Secret must go
+// through this client so the apiserver enforces RBAC exactly as it would for a direct kubectl
+// call by that user - never through m.client, which is this ServiceAccount's own cached client.
+func (m *instance) getImpersonatedClient(token string) (client.Client, error) {
+	config, err := m.getKubernetesRestConfig(token)
+	if err != nil {
+		return nil, err
+	}
+
+	return client.New(config, client.Options{Scheme: m.scheme})
 }
 
 // getUserFromToken returns the caller's username and group memberships, as reported by the

@@ -73,6 +73,47 @@ func (m *instance) IsCAPIInstalled(ctx context.Context) (bool, error) {
 	return m.isCAPIInstalled(ctx)
 }
 
+// CreateProfileObject exposes createProfileObject for tests. writeClient is passed explicitly
+// (rather than derived from a token via GetImpersonatedClient) so tests can exercise the write
+// path against a fake client without a live apiserver to token-review against.
+func (m *instance) CreateProfileObject(ctx context.Context, writeClient client.Client,
+	req *CreateProfileRequest) error {
+
+	return m.createProfileObject(ctx, writeClient, req)
+}
+
+// UpdateProfileObject exposes updateProfileObject for tests.
+func (m *instance) UpdateProfileObject(ctx context.Context, writeClient client.Client,
+	req *UpdateProfileRequest) error {
+
+	return m.updateProfileObject(ctx, writeClient, req)
+}
+
+// DeleteProfileObject exposes deleteProfileObject for tests.
+func (m *instance) DeleteProfileObject(ctx context.Context, writeClient client.Client,
+	req *DeleteProfileRequest) error {
+
+	return m.deleteProfileObject(ctx, writeClient, req)
+}
+
+// ProfileExists exposes profileExists for tests.
+func (m *instance) ProfileExists(ctx context.Context, id ProfileIdentity) (bool, error) {
+	return m.profileExists(ctx, id)
+}
+
+// GetImpersonatedClient exposes getImpersonatedClient for tests.
+func (m *instance) GetImpersonatedClient(token string) (client.Client, error) {
+	return m.getImpersonatedClient(token)
+}
+
+var (
+	ValidateProfileIdentity   = validateProfileIdentity
+	ValidateCreateContent     = validateCreateContent
+	ContentConfigMapNamespace = contentConfigMapNamespace
+	ContentConfigMapName      = contentConfigMapName
+	IsRemoteHelmSource        = isRemoteHelmSource
+)
+
 // CapiClusterCRDName exposes capiClusterCRDName for tests.
 var CapiClusterCRDName = capiClusterCRDName
 

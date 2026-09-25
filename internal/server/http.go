@@ -31,6 +31,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
@@ -1052,6 +1053,93 @@ var (
 		handleAnalyzePipeline(c, "classifier_name", mcpclient.AnalyzeClassifierPipeline)
 	}
 
+	createProfile = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("create a ClusterProfile/Profile")
+
+		var req CreateProfileRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		token, err := getTokenFromAuthorizationHeader(c)
+		if err != nil {
+			return // already aborted by getTokenFromAuthorizationHeader
+		}
+
+		manager := GetManagerInstance()
+		writeClient, err := manager.getImpersonatedClient(token)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if err := manager.createProfileObject(c.Request.Context(), writeClient, &req); err != nil {
+			abortProfileWriteError(c, err)
+			return
+		}
+
+		c.JSON(http.StatusCreated, req.ProfileIdentity)
+	}
+
+	updateProfile = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("update a ClusterProfile/Profile")
+
+		var req UpdateProfileRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		token, err := getTokenFromAuthorizationHeader(c)
+		if err != nil {
+			return
+		}
+
+		manager := GetManagerInstance()
+		writeClient, err := manager.getImpersonatedClient(token)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if err := manager.updateProfileObject(c.Request.Context(), writeClient, &req); err != nil {
+			abortProfileWriteError(c, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, req.ProfileIdentity)
+	}
+
+	deleteProfile = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("delete a ClusterProfile/Profile")
+
+		var req DeleteProfileRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		token, err := getTokenFromAuthorizationHeader(c)
+		if err != nil {
+			return
+		}
+
+		manager := GetManagerInstance()
+		writeClient, err := manager.getImpersonatedClient(token)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if err := manager.deleteProfileObject(c.Request.Context(), writeClient, &req); err != nil {
+			abortProfileWriteError(c, err)
+			return
+		}
+
+		c.Status(http.StatusNoContent)
+	}
+
 	getStats = func(c *gin.Context) {
 		ginLogger.V(logs.LogDebug).Info("get Sveltos stats")
 
@@ -1096,6 +1184,12 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/profiles", getProfiles)
 	// Return details about a ClusterProfile/Profile
 	r.GET("/profile", getProfile)
+	// Create a ClusterProfile/Profile
+	r.POST("/profile", createProfile)
+	// Update a ClusterProfile/Profile's spec (and, optionally, referenced ConfigMap/Secret content)
+	r.PUT("/profile", updateProfile)
+	// Delete a ClusterProfile/Profile (optionally its referenced ConfigMap/Secret content too)
+	r.DELETE("/profile", deleteProfile)
 	// Return existing events
 	r.GET("/events", getEvents)
 	// Return details about a specific EventTrigger
@@ -1336,6 +1430,28 @@ func getClusterFromQuery(c *gin.Context) (namespace, name string, clusterType li
 
 	c.JSON(http.StatusBadRequest, gin.H{errorKey: "cluster type is incorrect"})
 	return
+}
+
+// abortProfileWriteError maps an error from createProfileObject/updateProfileObject/
+// deleteProfileObject to the appropriate HTTP status: 400 for a request-shape problem
+// (ErrInvalidRequest), 409 for a name collision (ErrProfileAlreadyExists), the apiserver's own
+// status for a Forbidden/NotFound response from the impersonated client (passed through as-is,
+// per the Authorization model - the caller's own RBAC decided this, not ui-backend's), and 500
+// for anything else.
+func abortProfileWriteError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, ErrInvalidRequest):
+		_ = c.AbortWithError(http.StatusBadRequest, err)
+	case errors.Is(err, ErrProfileAlreadyExists):
+		_ = c.AbortWithError(http.StatusConflict, err)
+	case apierrors.IsForbidden(err):
+		_ = c.AbortWithError(http.StatusForbidden, err)
+	case apierrors.IsNotFound(err):
+		_ = c.AbortWithError(http.StatusNotFound, err)
+	default:
+		ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("profile write failed %s: %v", c.Request.URL, err))
+		_ = c.AbortWithError(http.StatusInternalServerError, err)
+	}
 }
 
 // abortMCPError aborts the request for an error returned by an mcpclient call. If the MCP
