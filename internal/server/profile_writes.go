@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -96,8 +97,28 @@ type ExistingContentRef struct {
 	Name      string `json:"name"`
 }
 
-// CreateProfileRequest is the body of POST /profile. Exactly one of HelmChart, YAML or
-// ExistingContent must be set.
+// SecretReferenceInput identifies an existing Secret by namespace and name. Like
+// ExistingContentRef, this only references a Secret the caller has already created - the
+// dashboard does not create or edit credentials.
+type SecretReferenceInput struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
+
+// RemoteURLInput is the subset of configv1beta1.RemoteURL the Create form exposes: an
+// HTTP(S)/OCI source PolicyRefs fetch directly, with no ConfigMap/Secret created for it. Interval
+// is a Go duration string (e.g. "5m"); left empty, the CRD's own default applies.
+type RemoteURLInput struct {
+	URL                   string                `json:"url"`
+	Interval              string                `json:"interval,omitempty"`
+	SecretRef             *SecretReferenceInput `json:"secretRef,omitempty"`
+	Template              bool                  `json:"template,omitempty"`
+	InsecureSkipTLSVerify bool                  `json:"insecureSkipTLSVerify,omitempty"`
+	PlainHTTP             bool                  `json:"plainHTTP,omitempty"`
+}
+
+// CreateProfileRequest is the body of POST /profile. Exactly one of HelmChart, YAML,
+// ExistingContent or RemoteURL must be set.
 type CreateProfileRequest struct {
 	ProfileIdentity
 	ClusterSelector map[string]string   `json:"clusterSelector"`
@@ -106,6 +127,7 @@ type CreateProfileRequest struct {
 	HelmChart       *HelmChartInput     `json:"helmChart,omitempty"`
 	YAML            *string             `json:"yaml,omitempty"`
 	ExistingContent *ExistingContentRef `json:"existingContent,omitempty"`
+	RemoteURL       *RemoteURLInput     `json:"remoteURL,omitempty"`
 }
 
 // UpdateProfileRequest is the body of PUT /profile. SpecYAML replaces the object's entire
@@ -162,8 +184,11 @@ func validateCreateContent(req *CreateProfileRequest) error {
 	if req.ExistingContent != nil {
 		set++
 	}
+	if req.RemoteURL != nil {
+		set++
+	}
 	if set != 1 {
-		return invalidRequestf("exactly one of helmChart, yaml, or existingContent must be set")
+		return invalidRequestf("exactly one of helmChart, yaml, existingContent, or remoteURL must be set")
 	}
 
 	switch {
@@ -186,8 +211,31 @@ func validateCreateContent(req *CreateProfileRequest) error {
 			return invalidRequestf("existingContent.kind must be %q or %q",
 				libsveltosv1beta1.ConfigMapReferencedResourceKind, libsveltosv1beta1.SecretReferencedResourceKind)
 		}
+	case req.RemoteURL != nil:
+		return validateRemoteURL(req.RemoteURL)
 	}
 
+	return nil
+}
+
+// validateRemoteURL checks the fields of a RemoteURL content flow: the url scheme, that
+// interval (if set) is a parseable Go duration, and that secretRef (if set) fully identifies a
+// Secret.
+func validateRemoteURL(ru *RemoteURLInput) error {
+	lower := strings.ToLower(ru.URL)
+	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") &&
+		!strings.HasPrefix(lower, "oci://") {
+
+		return invalidRequestf("remoteURL.url must start with http://, https://, or oci://")
+	}
+	if ru.Interval != "" {
+		if _, err := time.ParseDuration(ru.Interval); err != nil {
+			return invalidRequestf("remoteURL.interval is not a valid duration: %v", err)
+		}
+	}
+	if ru.SecretRef != nil && (ru.SecretRef.Name == "" || ru.SecretRef.Namespace == "") {
+		return invalidRequestf("remoteURL.secretRef requires namespace and name")
+	}
 	return nil
 }
 
@@ -225,6 +273,31 @@ func contentConfigMapName(profileName string) string {
 // policyRefKindFor maps an ExistingContentRef/HelmChart-flow content kind to the PolicyRef.Kind
 // string - currently identical, kept as a named conversion point in case that changes.
 func policyRefKindFor(kind string) string { return kind }
+
+// buildRemoteURL converts a RemoteURLInput already checked by validateCreateContent into the
+// configv1beta1.RemoteURL PolicyRefs consume.
+func buildRemoteURL(input *RemoteURLInput) (*configv1beta1.RemoteURL, error) {
+	remoteURL := &configv1beta1.RemoteURL{
+		URL:                   input.URL,
+		Template:              input.Template,
+		InsecureSkipTLSVerify: input.InsecureSkipTLSVerify,
+		PlainHTTP:             input.PlainHTTP,
+	}
+	if input.Interval != "" {
+		d, err := time.ParseDuration(input.Interval)
+		if err != nil {
+			return nil, invalidRequestf("remoteURL.interval is not a valid duration: %v", err)
+		}
+		remoteURL.Interval = &metav1.Duration{Duration: d}
+	}
+	if input.SecretRef != nil {
+		remoteURL.SecretRef = &corev1.SecretReference{
+			Namespace: input.SecretRef.Namespace,
+			Name:      input.SecretRef.Name,
+		}
+	}
+	return remoteURL, nil
+}
 
 // buildProfileObject returns an unsaved ClusterProfile or Profile object for the given identity
 // and spec, ready to be passed to writeClient.Create.
@@ -352,6 +425,14 @@ func (m *instance) createProfileObject(ctx context.Context, writeClient client.C
 				Namespace: req.ExistingContent.Namespace,
 			},
 		}
+		return createProfileWithSpec(ctx, writeClient, req.ProfileIdentity, &spec)
+
+	case req.RemoteURL != nil:
+		remoteURL, err := buildRemoteURL(req.RemoteURL)
+		if err != nil {
+			return err
+		}
+		spec.PolicyRefs = []configv1beta1.PolicyRef{{RemoteURL: remoteURL}}
 		return createProfileWithSpec(ctx, writeClient, req.ProfileIdentity, &spec)
 
 	default: // req.YAML != nil, enforced by validateCreateContent

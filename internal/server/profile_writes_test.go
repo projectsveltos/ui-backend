@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -52,6 +53,8 @@ const (
 	testContentDataKey       = "content.yaml"
 	testTakenProfileName     = "taken"
 	testMinimalConfigMapYAML = "kind: ConfigMap"
+	testRemoteURL            = "https://example.com/manifest.yaml"
+	testRemoteURLInterval    = "5m"
 )
 
 var _ = Describe("Profile writes: validation", func() {
@@ -134,6 +137,31 @@ var _ = Describe("Profile writes: validation", func() {
 			ExistingContent: &server.ExistingContentRef{
 				Kind: string(libsveltosv1beta1.SecretReferencedResourceKind), Namespace: testRefNamespace, Name: testRefName,
 			},
+		})
+		Expect(err).To(BeNil())
+	})
+
+	It("validateCreateContent validates a remoteURL flow's url, interval, and secretRef", func() {
+		err := server.ValidateCreateContent(&server.CreateProfileRequest{
+			RemoteURL: &server.RemoteURLInput{URL: "ftp://example.com/manifest.yaml"},
+		})
+		Expect(err).ToNot(BeNil())
+
+		err = server.ValidateCreateContent(&server.CreateProfileRequest{
+			RemoteURL: &server.RemoteURLInput{URL: "oci://registry.example.com/artifact", Interval: "not-a-duration"},
+		})
+		Expect(err).ToNot(BeNil())
+
+		err = server.ValidateCreateContent(&server.CreateProfileRequest{
+			RemoteURL: &server.RemoteURLInput{
+				URL:       testRemoteURL,
+				SecretRef: &server.SecretReferenceInput{Name: testRefName},
+			},
+		})
+		Expect(err).ToNot(BeNil())
+
+		err = server.ValidateCreateContent(&server.CreateProfileRequest{
+			RemoteURL: &server.RemoteURLInput{URL: testRemoteURL, Interval: testRemoteURLInterval},
 		})
 		Expect(err).To(BeNil())
 	})
@@ -269,6 +297,46 @@ var _ = Describe("Profile writes: create", func() {
 		cmList := &corev1.ConfigMapList{}
 		Expect(c.List(context.TODO(), cmList)).To(Succeed())
 		Expect(cmList.Items).To(HaveLen(1))
+	})
+
+	It("creates a ClusterProfile from the RemoteURL flow, creating no ConfigMap/Secret", func() {
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+		m := server.NewTestInstance(c, logger)
+
+		name := randomString()
+		req := &server.CreateProfileRequest{
+			ProfileIdentity: server.ProfileIdentity{Kind: configv1beta1.ClusterProfileKind, Name: name},
+			ClusterSelector: map[string]string{testEnvLabelKey: testEnvValue},
+			RemoteURL: &server.RemoteURLInput{
+				URL:                   testRemoteURL,
+				Interval:              testRemoteURLInterval,
+				SecretRef:             &server.SecretReferenceInput{Namespace: testRefNamespace, Name: testRefName},
+				Template:              true,
+				InsecureSkipTLSVerify: true,
+			},
+		}
+		Expect(m.CreateProfileObject(context.TODO(), c, req)).To(Succeed())
+
+		cp := &configv1beta1.ClusterProfile{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: name}, cp)).To(Succeed())
+		Expect(cp.Spec.PolicyRefs).To(HaveLen(1))
+
+		ref := cp.Spec.PolicyRefs[0]
+		Expect(ref.Kind).To(BeEmpty())
+		Expect(ref.Name).To(BeEmpty())
+		Expect(ref.Namespace).To(BeEmpty())
+		Expect(ref.RemoteURL).ToNot(BeNil())
+		Expect(ref.RemoteURL.URL).To(Equal(testRemoteURL))
+		Expect(ref.RemoteURL.Interval).ToNot(BeNil())
+		Expect(ref.RemoteURL.Interval.Duration).To(Equal(5 * time.Minute))
+		Expect(ref.RemoteURL.SecretRef).To(Equal(&corev1.SecretReference{Namespace: testRefNamespace, Name: testRefName}))
+		Expect(ref.RemoteURL.Template).To(BeTrue())
+		Expect(ref.RemoteURL.InsecureSkipTLSVerify).To(BeTrue())
+		Expect(ref.RemoteURL.PlainHTTP).To(BeFalse())
+
+		cmList := &corev1.ConfigMapList{}
+		Expect(c.List(context.TODO(), cmList)).To(Succeed())
+		Expect(cmList.Items).To(BeEmpty())
 	})
 
 	It("rejects create when a profile with the same identity already exists", func() {
