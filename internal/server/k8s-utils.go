@@ -58,21 +58,31 @@ const (
 	resourceManagementClusterClassifiers = "managementclusterclassifiers"
 )
 
+// getKubernetesRestConfig builds a rest.Config carrying the caller's own bearer token. When
+// an OIDC proxy is configured (see SetOIDCProxyConfig), the token goes there instead of the
+// API server directly. See the oidcProxyHost field doc on instance for why only this function
+// (i.e. only getUserFromToken/validateToken and getImpersonatedClient) does so.
 func (m *instance) getKubernetesRestConfig(token string) (*rest.Config, error) {
-	const (
-		rootCAFile = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-	)
+	const rootCAFile = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
+	host := m.config.Host
+	caFile := rootCAFile
+	if m.oidcProxyHost != "" {
+		host = m.oidcProxyHost
+		caFile = m.oidcProxyCAFile
+	}
 
 	tlsClientConfig := rest.TLSClientConfig{}
-	if _, err := certutil.NewPool(rootCAFile); err != nil {
-		return nil, err
-	} else {
-		tlsClientConfig.CAFile = rootCAFile
+	if caFile != "" {
+		if _, err := certutil.NewPool(caFile); err != nil {
+			return nil, err
+		}
+		tlsClientConfig.CAFile = caFile
 	}
 
 	return &rest.Config{
 		BearerToken:     token,
-		Host:            m.config.Host,
+		Host:            host,
 		TLSClientConfig: tlsClientConfig,
 	}, nil
 }

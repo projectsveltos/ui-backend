@@ -18,6 +18,8 @@ package server_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -25,6 +27,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/textlogger"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -35,6 +38,21 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/ui-backend/internal/server"
 )
+
+// testCACert is a throwaway self-signed certificate, valid only as PEM fixture data for
+// certutil.NewPool in the getKubernetesRestConfig tests below. It signs nothing real.
+const testCACert = `-----BEGIN CERTIFICATE-----
+MIIBjjCCATWgAwIBAgIUHrshAui6vKaNqub1M4dlmF4fJAswCgYIKoZIzj0EAwIw
+HTEbMBkGA1UEAwwSdGVzdC1vaWRjLXByb3h5LWNhMB4XDTI2MDkyNTIwMDcyNFoX
+DTM2MDkyMjIwMDcyNFowHTEbMBkGA1UEAwwSdGVzdC1vaWRjLXByb3h5LWNhMFkw
+EwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAELArG+XnaTu58ShXg3/u/RkCjsoZuoT11
+bUPUHl3sztMwohF9W4ZCarIbyTMx5rhPJopsmpwIHQXmzKv6TiK9fKNTMFEwHQYD
+VR0OBBYEFLCInWZJURTDKIsdE3yabV6Ws3dDMB8GA1UdIwQYMBaAFLCInWZJURTD
+KIsdE3yabV6Ws3dDMA8GA1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDRwAwRAIg
+PWQ6UUeQgXtEfDmPYE0jYGqTC6eHyC2lQe3tRVVJMb0CIDdohBiPaw8X/0+GfUUO
+KPNrrouhZT4docpWLAsy2pVh
+-----END CERTIFICATE-----
+`
 
 // These tests exercise the canList*/canGet* SubjectAccessReview checks against a real,
 // RBAC-enabled envtest apiserver (see cfg/testEnv in suite_test.go). A fake client.Client
@@ -336,5 +354,49 @@ var _ = Describe("isCAPIInstalled", func() {
 			installed, err := m.IsCAPIInstalled(context.TODO())
 			return err == nil && installed
 		}).Should(BeTrue())
+	})
+})
+
+var _ = Describe("getKubernetesRestConfig OIDC proxy routing", func() {
+	// The fallback branch (oidcProxyHost unset, falling back to config.Host and the API
+	// server's own /var/run/secrets/kubernetes.io/serviceaccount/ca.crt) is pre-existing,
+	// unchanged behavior that only resolves inside a real pod, so it's intentionally not
+	// covered here. These tests cover only the new OIDC-proxy branch.
+	var logger = textlogger.NewLogger(textlogger.NewConfig())
+	var apiServerConfig = &rest.Config{Host: "https://kubernetes.default.svc:443"}
+	const token = "test-token"
+	const proxyHost = "https://kube-oidc-proxy.kube-oidc-proxy.svc.cluster.local:443"
+
+	It("routes to the OIDC proxy and pins its CA when both are set", func() {
+		caFile := filepath.Join(GinkgoT().TempDir(), "proxy-ca.pem")
+		Expect(os.WriteFile(caFile, []byte(testCACert), 0o600)).To(Succeed())
+
+		m := server.NewTestInstanceWithOIDCProxy(apiServerConfig, proxyHost, caFile, nil, logger)
+
+		restConfig, err := m.GetKubernetesRestConfig(token)
+
+		Expect(err).To(BeNil())
+		Expect(restConfig.Host).To(Equal(proxyHost))
+		Expect(restConfig.BearerToken).To(Equal(token))
+		Expect(restConfig.TLSClientConfig.CAFile).To(Equal(caFile))
+	})
+
+	It("routes to the OIDC proxy without pinning a CA when the proxy CA file is left empty", func() {
+		m := server.NewTestInstanceWithOIDCProxy(apiServerConfig, proxyHost, "", nil, logger)
+
+		restConfig, err := m.GetKubernetesRestConfig(token)
+
+		Expect(err).To(BeNil())
+		Expect(restConfig.Host).To(Equal(proxyHost))
+		Expect(restConfig.TLSClientConfig.CAFile).To(BeEmpty())
+	})
+
+	It("returns an error when the configured OIDC proxy CA file cannot be read", func() {
+		missingCAFile := filepath.Join(GinkgoT().TempDir(), "does-not-exist.pem")
+		m := server.NewTestInstanceWithOIDCProxy(apiServerConfig, proxyHost, missingCAFile, nil, logger)
+
+		_, err := m.GetKubernetesRestConfig(token)
+
+		Expect(err).ToNot(BeNil())
 	})
 })
