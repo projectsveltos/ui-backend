@@ -221,7 +221,9 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&oidcProxyHost, "oidc-proxy-host", "",
 		"Host (scheme://host:port) of an OIDC-aware authenticating proxy (e.g. kube-oidc-proxy) sitting in front of "+
 			"the API server. When set, the dashboard user's own bearer token is sent here instead of the API server "+
-			"directly. Use this when the API server itself isn't configured for OIDC; leave unset otherwise.")
+			"directly. Use this when the API server itself isn't configured for OIDC; leave unset otherwise. "+
+			"Every user token goes to the proxy, including a ServiceAccount token pasted into the dashboard: the "+
+			"proxy refuses those unless token passthrough is enabled on it.")
 
 	fs.StringVar(&oidcProxyCAFile, "oidc-proxy-ca-file", "",
 		"Path to a PEM CA bundle used to verify the TLS certificate presented by --oidc-proxy-host. Ignored if "+

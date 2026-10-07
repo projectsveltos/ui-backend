@@ -54,6 +54,29 @@ func NewTestInstanceWithOIDCProxy(cfg *rest.Config, oidcProxyHost, oidcProxyCAFi
 	}
 }
 
+// ValidateToken and GetUserFromToken expose the two flows that send the dashboard user's own bearer
+// token, for tests that verify what actually goes over the wire.
+func (m *instance) ValidateToken(token string) error {
+	return m.validateToken(token)
+}
+
+func (m *instance) GetUserFromToken(token string) (user string, groups []string, err error) {
+	return m.getUserFromToken(token)
+}
+
+// DescribeTokenFailure exposes describeTokenFailure for tests.
+func (m *instance) DescribeTokenFailure(token string) string {
+	return m.describeTokenFailure(token)
+}
+
+// DescribeToken exposes describeToken, returning its log form, for tests.
+func DescribeToken(token string) string {
+	return describeToken(token).String()
+}
+
+// GetTokenFromAuthorizationHeader exposes getTokenFromAuthorizationHeader for tests.
+var GetTokenFromAuthorizationHeader = getTokenFromAuthorizationHeader
+
 // GetKubernetesRestConfig exposes getKubernetesRestConfig for tests.
 func (m *instance) GetKubernetesRestConfig(token string) (*rest.Config, error) {
 	return m.getKubernetesRestConfig(token)

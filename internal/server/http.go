@@ -1522,6 +1522,12 @@ func handleAnalyzePipeline(c *gin.Context, resourceQueryParam string, analyze an
 	c.JSON(http.StatusOK, result)
 }
 
+const (
+	// bearerPrefix is the scheme of the Authorization header: "Bearer <token>". The scheme is
+	// case-insensitive (RFC 7235).
+	bearerPrefix = "Bearer "
+)
+
 func getTokenFromAuthorizationHeader(c *gin.Context) (string, error) {
 	// Get the authorization header value
 	authorizationHeader := c.GetHeader("Authorization")
@@ -1533,9 +1539,18 @@ func getTokenFromAuthorizationHeader(c *gin.Context) (string, error) {
 		return "", errors.New(errorMsg)
 	}
 
+	// The authorization header format is "Bearer <token>". A shorter header, or another scheme,
+	// has no token to extract.
+	if len(authorizationHeader) < len(bearerPrefix) ||
+		!strings.EqualFold(authorizationHeader[:len(bearerPrefix)], bearerPrefix) {
+
+		errorMsg := "authorization header is not a bearer token"
+		c.JSON(http.StatusUnauthorized, gin.H{errorKey: errorMsg})
+		return "", errors.New(errorMsg)
+	}
+
 	// Extract the token from the authorization header
-	// Assuming the authorization header format is "Bearer <token>"
-	token := authorizationHeader[len("Bearer "):]
+	token := strings.TrimSpace(authorizationHeader[len(bearerPrefix):])
 	// Check if the token is present
 	if token == "" {
 		errorMsg := "token is missing"
@@ -1563,7 +1578,10 @@ func validateToken(c *gin.Context) (user string, groups []string, err error) {
 	manager := GetManagerInstance()
 	err = manager.validateToken(token)
 	if err != nil {
-		ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate token: %v", err))
+		// A 401 here is the answer of whatever the token was sent to, and says nothing about why
+		// the token was refused. Log what kind of token it was and where it went, never the token.
+		ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate token: %v. %s",
+			err, manager.describeTokenFailure(token)))
 		_ = c.AbortWithError(http.StatusUnauthorized, errors.New("failed to validate token"))
 		return "", nil, err
 	}
