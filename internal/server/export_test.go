@@ -54,6 +54,12 @@ func NewTestInstanceWithOIDCProxy(cfg *rest.Config, oidcProxyHost, oidcProxyCAFi
 	}
 }
 
+// SetOIDCProxyAPIServerHost sets the Host header sent to the OIDC proxy, for tests.
+func (m *instance) SetOIDCProxyAPIServerHost(host string) *instance {
+	m.oidcProxyAPIServerHost = host
+	return m
+}
+
 // ValidateToken and GetUserFromToken expose the two flows that send the dashboard user's own bearer
 // token, for tests that verify what actually goes over the wire.
 func (m *instance) ValidateToken(token string) error {

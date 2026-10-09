@@ -102,13 +102,17 @@ type instance struct {
 	// oidcProxyCAFile is the PEM CA bundle used to verify oidcProxyHost's TLS certificate.
 	// Ignored when oidcProxyHost is empty. Left empty, the system's default trust store is
 	// used instead of pinning to a specific CA.
-	oidcProxyCAFile    string
-	client             client.Client
-	scheme             *runtime.Scheme
-	clusterMux         sync.RWMutex // use a Mutex to update managed Clusters
-	profileMux         sync.RWMutex // use a Mutex to update cached Profiles
-	clusterStatusesMux sync.RWMutex // mutex to update cached ClusterSummary instances
-	logger             logr.Logger
+	oidcProxyCAFile string
+	// oidcProxyAPIServerHost, when non-empty and oidcProxyHost is set, is the Host header sent to the
+	// proxy with the dashboard user's token (hostname or hostname:port of the API server). The proxy
+	// forwards it unchanged to the API server. Left empty, the Host header is the proxy's own address.
+	oidcProxyAPIServerHost string
+	client                 client.Client
+	scheme                 *runtime.Scheme
+	clusterMux             sync.RWMutex // use a Mutex to update managed Clusters
+	profileMux             sync.RWMutex // use a Mutex to update cached Profiles
+	clusterStatusesMux     sync.RWMutex // mutex to update cached ClusterSummary instances
+	logger                 logr.Logger
 
 	sveltosClusters      map[corev1.ObjectReference]ClusterInfo
 	capiClusters         map[corev1.ObjectReference]ClusterInfo
@@ -176,8 +180,9 @@ func GetManagerInstance() *instance {
 // getKubernetesRestConfig routes the dashboard user's own bearer token to. Must be called
 // after InitializeManagerInstance. A no-op (falling back to config.Host and the API server's
 // own CA) when host is left empty, which is the default when no proxy is in front of the
-// API server.
-func SetOIDCProxyConfig(host, caFile string) {
+// API server. apiServerHost, when set, is sent as the Host header to the proxy: see
+// oidcProxyAPIServerHost.
+func SetOIDCProxyConfig(host, caFile, apiServerHost string) {
 	lock.Lock()
 	defer lock.Unlock()
 	if managerInstance == nil {
@@ -185,6 +190,7 @@ func SetOIDCProxyConfig(host, caFile string) {
 	}
 	managerInstance.oidcProxyHost = host
 	managerInstance.oidcProxyCAFile = caFile
+	managerInstance.oidcProxyAPIServerHost = apiServerHost
 }
 
 const (
