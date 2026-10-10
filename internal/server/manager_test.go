@@ -381,6 +381,36 @@ var _ = Describe("Manager", func() {
 		Expect(ok).To(BeFalse())
 	})
 
+	It("MapToClusterFeatureSummaries carries DriftHistory over only for features that have one", func() {
+		driftHistory := &configv1beta1.DriftHistory{
+			LastDetectedTime: metav1.Now(),
+			Resources: []configv1beta1.DriftedResourceRef{
+				{
+					Group: "apps", Kind: "Deployment", Namespace: randomString(), Name: randomString(),
+					HelmReleaseNamespace: randomString(), HelmReleaseName: randomString(),
+					DetectedTime: metav1.Now(),
+				},
+			},
+			Truncated: true,
+		}
+
+		featureSummaries := []configv1beta1.FeatureSummary{
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusProvisioned, DriftHistory: driftHistory},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioned},
+		}
+
+		result := server.MapToClusterFeatureSummaries(&featureSummaries)
+		Expect(result).To(HaveLen(2))
+
+		Expect(result[0].DriftHistory).ToNot(BeNil())
+		Expect(*result[0].DriftHistory).To(Equal(*driftHistory))
+		Expect(result[1].DriftHistory).To(BeNil())
+
+		// The cached copy must not share memory with the ClusterSummary it was built from
+		driftHistory.Resources[0].Name = randomString()
+		Expect(result[0].DriftHistory.Resources[0].Name).ToNot(Equal(driftHistory.Resources[0].Name))
+	})
+
 	It("GetClusterProfileStatusesByCluster returns a list of ClusterProfileStatus belonging to a cluster given in input", func() {
 		additionalClusterSummary := createTestClusterSummary(
 			"additionalSummary",

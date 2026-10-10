@@ -63,6 +63,9 @@ type ClusterFeatureSummary struct {
 	FeatureID      libsveltosv1beta1.FeatureID     `json:"featureID"`
 	Status         libsveltosv1beta1.FeatureStatus `json:"status,omitempty"`
 	FailureMessage *string                         `json:"failureMessage,omitempty"`
+	// DriftHistory lists the resources deployed by this feature that drifted, the most recent first.
+	// Only set when the profile syncMode is ContinuousWithDriftDetection and a drift was detected.
+	DriftHistory *configv1beta1.DriftHistory `json:"driftHistory,omitempty"`
 }
 
 type ProfileInfo struct {
@@ -693,11 +696,13 @@ func verifyLabelConfiguration(summary *configv1beta1.ClusterSummary) bool {
 
 func MapToClusterFeatureSummaries(featureSummaries *[]configv1beta1.FeatureSummary) []ClusterFeatureSummary {
 	clusterFeatureSummaries := make([]ClusterFeatureSummary, 0, len(*featureSummaries))
-	for _, featureSummary := range *featureSummaries {
+	for i := range *featureSummaries {
+		featureSummary := &(*featureSummaries)[i]
 		clusterFeatureSummary := ClusterFeatureSummary{
 			FeatureID:      featureSummary.FeatureID,
 			Status:         featureSummary.Status,
 			FailureMessage: featureSummary.FailureMessage,
+			DriftHistory:   featureSummary.DriftHistory.DeepCopy(),
 		}
 		clusterFeatureSummaries = append(clusterFeatureSummaries, clusterFeatureSummary)
 	}
