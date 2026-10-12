@@ -391,6 +391,27 @@ var _ = Describe("getKubernetesRestConfig OIDC proxy routing", func() {
 		Expect(restConfig.TLSClientConfig.CAFile).To(BeEmpty())
 	})
 
+	It("does not override the Host header unless the API server host is set", func() {
+		m := server.NewTestInstanceWithOIDCProxy(apiServerConfig, proxyHost, "", nil, logger)
+
+		restConfig, err := m.GetKubernetesRestConfig(token)
+
+		Expect(err).To(BeNil())
+		Expect(restConfig.WrapTransport).To(BeNil())
+	})
+
+	It("overrides the Host header when the API server host is set", func() {
+		m := server.NewTestInstanceWithOIDCProxy(apiServerConfig, proxyHost, "", nil, logger).
+			SetOIDCProxyAPIServerHost("api.example.internal")
+
+		restConfig, err := m.GetKubernetesRestConfig(token)
+
+		Expect(err).To(BeNil())
+		Expect(restConfig.WrapTransport).ToNot(BeNil())
+		// Only the header changes: the proxy is still the host the request goes to
+		Expect(restConfig.Host).To(Equal(proxyHost))
+	})
+
 	It("returns an error when the configured OIDC proxy CA file cannot be read", func() {
 		missingCAFile := filepath.Join(GinkgoT().TempDir(), "does-not-exist.pem")
 		m := server.NewTestInstanceWithOIDCProxy(apiServerConfig, proxyHost, missingCAFile, nil, logger)

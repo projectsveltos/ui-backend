@@ -25,6 +25,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"syscall"
 	"time"
 
@@ -61,18 +62,19 @@ import (
 )
 
 var (
-	setupLog             = ctrl.Log.WithName("setup")
-	diagnosticsAddress   string
-	concurrentReconciles int
-	restConfigQPS        float32
-	restConfigBurst      int
-	webhookPort          int
-	syncPeriod           time.Duration
-	healthAddr           string
-	profilerAddress      string
-	httpPort             string
-	oidcProxyHost        string
-	oidcProxyCAFile      string
+	setupLog               = ctrl.Log.WithName("setup")
+	diagnosticsAddress     string
+	concurrentReconciles   int
+	restConfigQPS          float32
+	restConfigBurst        int
+	webhookPort            int
+	syncPeriod             time.Duration
+	healthAddr             string
+	profilerAddress        string
+	httpPort               string
+	oidcProxyHost          string
+	oidcProxyCAFile        string
+	oidcProxyAPIServerHost string
 )
 
 const (
@@ -123,6 +125,14 @@ func main() {
 	pflag.Parse()
 
 	ctrl.SetLogger(klog.Background())
+
+	// The value is sent as a Host header: a scheme or a path would produce a malformed one
+	if strings.Contains(oidcProxyAPIServerHost, "/") {
+		setupLog.Error(fmt.Errorf("invalid value %q", oidcProxyAPIServerHost),
+			"--oidc-proxy-api-server-host must be a hostname or hostname:port, without scheme or path")
+		os.Exit(1)
+	}
+
 	ctrlOptions := ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                getDiagnosticsOptions(),
@@ -162,7 +172,7 @@ func main() {
 
 	server.InitializeManagerInstance(ctx, mgr.GetConfig(), mgr.GetClient(), scheme,
 		httpPort, ctrl.Log.WithName("gin"))
-	server.SetOIDCProxyConfig(oidcProxyHost, oidcProxyCAFile)
+	server.SetOIDCProxyConfig(oidcProxyHost, oidcProxyCAFile, oidcProxyAPIServerHost)
 
 	startSveltosClusterController(mgr)
 	startClusterSummaryController(mgr)
@@ -229,6 +239,14 @@ func initFlags(fs *pflag.FlagSet) {
 		"Path to a PEM CA bundle used to verify the TLS certificate presented by --oidc-proxy-host. Ignored if "+
 			"--oidc-proxy-host is unset. If left empty while --oidc-proxy-host is set, the system's default trust "+
 			"store is used instead of pinning to a specific CA.")
+
+	fs.StringVar(&oidcProxyAPIServerHost, "oidc-proxy-api-server-host", "",
+		"Hostname (or hostname:port) of the API server, sent as the Host header on the requests to "+
+			"--oidc-proxy-host. The proxy forwards that header to the API server, and a load balancer in front of "+
+			"the API server can reject a Host that does not match its TLS server name (HTTP 421 Misdirected "+
+			"Request). Only the header changes: the connection to the proxy and its certificate check do not. "+
+			"Ignored if --oidc-proxy-host is unset. If left empty, the Host header is the address of the proxy. "+
+			"Do not set it when the proxy is reached through an Ingress or a load balancer that routes by host.")
 }
 
 func setupChecks(mgr ctrl.Manager) {

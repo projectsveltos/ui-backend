@@ -80,11 +80,19 @@ func (m *instance) getKubernetesRestConfig(token string) (*rest.Config, error) {
 		tlsClientConfig.CAFile = caFile
 	}
 
-	return &rest.Config{
+	config := &rest.Config{
 		BearerToken:     token,
 		Host:            host,
 		TLSClientConfig: tlsClientConfig,
-	}, nil
+	}
+
+	// The proxy forwards the Host header to the API server. A load balancer in front of the API server can
+	// reject a Host that is not its own (HTTP 421 Misdirected Request), so send the API server's.
+	if m.oidcProxyHost != "" && m.oidcProxyAPIServerHost != "" {
+		config.WrapTransport = newHostOverrideWrapper(m.oidcProxyAPIServerHost)
+	}
+
+	return config, nil
 }
 
 // getImpersonatedClient returns a controller-runtime client authenticated as the token's own
