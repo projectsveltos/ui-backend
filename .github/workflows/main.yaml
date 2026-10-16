@@ -42,6 +42,7 @@ jobs:
       run: make test
       env:
         UT: true
+        TEST_ARGS: -race
   FV:
     runs-on: ubuntu-latest
     steps:

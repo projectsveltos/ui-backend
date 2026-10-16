@@ -386,7 +386,7 @@ var _ = Describe("Manager", func() {
 			LastDetectedTime: metav1.Now(),
 			Resources: []configv1beta1.DriftedResourceRef{
 				{
-					Group: "apps", Kind: "Deployment", Namespace: randomString(), Name: randomString(),
+					Group: "apps", Kind: deploymentKind, Namespace: randomString(), Name: randomString(),
 					HelmReleaseNamespace: randomString(), HelmReleaseName: randomString(),
 					DetectedTime: metav1.Now(),
 				},

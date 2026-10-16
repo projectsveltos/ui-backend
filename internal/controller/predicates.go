@@ -22,6 +22,7 @@ import (
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -173,4 +174,34 @@ func (p ClusterSummaryPredicate) Update(e event.UpdateEvent) bool {
 	}
 
 	return !reflect.DeepEqual(oldClusterSummary.Status.HelmReleaseSummaries, newClusterSummary.Status.HelmReleaseSummaries)
+}
+
+// GeneratedHealthCheckPredicate lets through only the HealthChecks generated for a ClusterSummary
+// (the ones carrying the ClusterSummary UID label). An update is let through when either the old or
+// the new object carries the label, so that a HealthCheck which stops being a generated one is noticed.
+type GeneratedHealthCheckPredicate struct{}
+
+func hasGeneratedHealthCheckLabel(obj client.Object) bool {
+	_, ok := obj.GetLabels()[configv1beta1.HealthMonitoringClusterSummaryUIDLabel]
+	return ok
+}
+
+// Create implements Predicate.
+func (p GeneratedHealthCheckPredicate) Create(e event.CreateEvent) bool {
+	return hasGeneratedHealthCheckLabel(e.Object)
+}
+
+// Update implements Predicate.
+func (p GeneratedHealthCheckPredicate) Update(e event.UpdateEvent) bool {
+	return hasGeneratedHealthCheckLabel(e.ObjectOld) || hasGeneratedHealthCheckLabel(e.ObjectNew)
+}
+
+// Delete implements Predicate.
+func (p GeneratedHealthCheckPredicate) Delete(e event.DeleteEvent) bool {
+	return hasGeneratedHealthCheckLabel(e.Object)
+}
+
+// Generic implements Predicate.
+func (p GeneratedHealthCheckPredicate) Generic(e event.GenericEvent) bool {
+	return hasGeneratedHealthCheckLabel(e.Object)
 }

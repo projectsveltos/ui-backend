@@ -20,6 +20,8 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -279,4 +281,28 @@ func GetNameFilter(f clusterFilters) string {
 
 func GetLabelFilter(f clusterFilters) string {
 	return f.labelSelector.String()
+}
+
+// GetClusterHealthResult exposes getClusterHealthResult for tests, with no resource filter.
+func (m *instance) GetClusterHealthResult(clusterType libsveltosv1beta1.ClusterType, clusterNamespace,
+	clusterName string, profileKind, profileName string, resourceKind string, limit, skip int,
+) (*ClusterHealthResult, error) {
+
+	return m.getClusterHealthResult(clusterType, clusterNamespace, clusterName,
+		&profileFilters{Kind: profileKind, Name: profileName}, &resourceFilters{Kind: resourceKind}, limit, skip)
+}
+
+// SetHealthStatusOnProfileStatuses runs what /getClusterStatus does to set the health state of each row.
+func (m *instance) SetHealthStatusOnProfileStatuses(clusterType libsveltosv1beta1.ClusterType,
+	clusterNamespace, clusterName string, rows []ProfileStatusResult) {
+
+	health := m.GetClusterHealth(clusterType, clusterNamespace, clusterName)
+	setProfileHealthStatus(rows, profileHealthStates(&health))
+}
+
+// GetManagedClusterDataNoFilters exposes getManagedClusterData with no filter.
+func GetManagedClusterDataNoFilters(clusters map[corev1.ObjectReference]ClusterInfo, manager *instance,
+	clusterType libsveltosv1beta1.ClusterType) ManagedClusters {
+
+	return getManagedClusterData(clusters, &clusterFilters{labelSelector: labels.NewSelector()}, manager, clusterType)
 }

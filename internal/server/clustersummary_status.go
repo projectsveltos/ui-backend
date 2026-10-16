@@ -19,12 +19,16 @@ package server
 import (
 	"strings"
 
+	"github.com/projectsveltos/addon-controller/lib/healthmonitoring"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 type ProfileStatusResult struct {
 	ProfileName string `json:"profileName"`
 	ProfileType string `json:"profileType"`
+	// HealthStatus is the health state of the profile on the cluster. Empty when health
+	// monitoring is not enabled for the profile.
+	HealthStatus healthmonitoring.State `json:"healthStatus,omitempty"`
 	ClusterFeatureSummary
 }
 

@@ -136,6 +136,9 @@ type instance struct {
 	// the set becomes empty.
 	clusterWithOutdatedHelmCharts map[string]*libsveltosset.Set
 	profiles                      map[corev1.ObjectReference]ProfileInfo
+	// health keeps the data needed to tell how healthy a cluster is (health monitoring).
+	// It has its own lock, never held together with the others.
+	health *healthCache
 }
 
 var (
@@ -161,6 +164,7 @@ func InitializeManagerInstance(ctx context.Context, config *rest.Config, c clien
 				clusterProvisioning:           make(map[string]*libsveltosset.Set),
 				clusterWithOutdatedHelmCharts: make(map[string]*libsveltosset.Set),
 				profiles:                      make(map[corev1.ObjectReference]ProfileInfo),
+				health:                        newHealthCache(),
 				clusterMux:                    sync.RWMutex{},
 				clusterStatusesMux:            sync.RWMutex{},
 				profileMux:                    sync.RWMutex{},
@@ -447,6 +451,8 @@ func (m *instance) AddClusterProfileStatus(summary *configv1beta1.ClusterSummary
 	csRef := getKeyFromObject(m.scheme, summary)
 	clusterKey := clusterIssuesKey(summary.Spec.ClusterType, summary.Namespace, summary.Spec.ClusterName)
 
+	m.addHealthSummary(summary, csRef, clusterKey)
+
 	m.clusterStatusesMux.Lock()
 	defer m.clusterStatusesMux.Unlock()
 
@@ -463,6 +469,8 @@ func (m *instance) RemoveClusterProfileStatus(summaryNamespace, summaryName stri
 		Kind:       configv1beta1.ClusterSummaryKind,
 		APIVersion: configv1beta1.GroupVersion.String(),
 	}
+
+	m.health.removeSummary(csRef)
 
 	m.clusterStatusesMux.Lock()
 	defer m.clusterStatusesMux.Unlock()

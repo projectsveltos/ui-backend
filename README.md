@@ -73,6 +73,11 @@ returns
 }
 ```
 
+Each cluster also carries `healthStatus`, the health of the resources Sveltos deployed to it, when at least one profile
+matching the cluster has `spec.healthMonitoring.enabled` set. Values are `NoData` (no report yet), `Healthy`, `Suspended`,
+`Progressing` and `Degraded` (the worst status of all monitored resources). The field is omitted when no profile monitors the
+cluster. To see which resources are not healthy, use [/clusterHealth](#get-the-unhealthy-resources-of-a-cluster).
+
 This API supports pagination. Use:
 
 . ```limit=<int>``` to specify the number of ClusterAPI powered clusters the API will return
@@ -117,6 +122,8 @@ returns
   ]
 }
 ```
+
+Each cluster carries `healthStatus` as described for [/capiclusters](#get-clusterapi-powered-clusters).
 
 This API supports pagination. Use:
 
@@ -280,6 +287,7 @@ returns
     {
       "profileName": "deploy-resources",
       "profileType": "ClusterProfile",
+      "healthStatus": "Degraded",
       "featureID": "Resources",
       "status": "Provisioned"
     },
@@ -293,6 +301,85 @@ returns
   "totalResources": 3
 }
 ```
+
+When the profile has `spec.healthMonitoring.enabled` set, each of its rows carries `healthStatus`: the health of the resources
+the profile deployed on this cluster (`NoData`, `Healthy`, `Suspended`, `Progressing`, `Degraded`). The field is omitted otherwise.
+
+### Get the unhealthy resources of a cluster
+
+```/clusterHealth?namespace=<namespace>&name=<cluster-name>&type=<cluster-type>```
+
+where cluster type can either be __capi__ for ClusterAPI powered clusters or __sveltos__ for SveltosClusters
+
+Returns the resources of the cluster that are not Healthy, as reported by health monitoring (profiles with
+`spec.healthMonitoring.enabled`). The user needs permission to get the cluster.
+
+It is also possible to filter by:
+
+1. `profile_kind` => only resources reported for profiles of this kind (`ClusterProfile` or `Profile`)
+2. `profile_namespace` => only resources reported for profiles in this namespace
+3. `profile_name` => only resources reported for the profile with this name
+4. `resource_kind` => only resources whose kind contains the specified string
+5. `resource_namespace` => only resources in a namespace whose name contains the specified string
+6. `resource_name` => only resources whose name contains the specified string
+
+This API supports pagination. Use:
+
+. ```limit=<int>``` to specify the number of resources the API will return
+
+. ```skip=<int>``` to specify from which resource to start (resources are ordered by status, worst first, then by kind, namespace and name)
+
+For instance:
+
+```
+http://localhost:9000/clusterHealth?namespace=default&name=clusterapi-workload&type=capi
+```
+
+returns
+
+```json
+{
+  "state": "Degraded",
+  "totalResources": 2,
+  "resources": [
+    {
+      "group": "apps",
+      "version": "v1",
+      "kind": "Deployment",
+      "namespace": "nginx",
+      "name": "nginx",
+      "status": "Degraded",
+      "message": "0/1 replicas available",
+      "profiles": [
+        {
+          "kind": "ClusterProfile",
+          "name": "deploy-resources"
+        }
+      ]
+    },
+    {
+      "group": "apps",
+      "version": "v1",
+      "kind": "DaemonSet",
+      "namespace": "monitoring",
+      "name": "node-exporter",
+      "status": "Suspended",
+      "message": "paused",
+      "profiles": [],
+      "healthCheckName": "my-daemonset-check"
+    }
+  ]
+}
+```
+
+`state` is the health of the whole cluster, so an empty list is explained: `NotEnabled` (no profile monitors the cluster),
+`NoData` (monitoring is enabled but no report has been received yet), `Healthy`, `Suspended`, `Progressing` or `Degraded`.
+`state` is not affected by the filters or by pagination.
+
+Each resource lists the `profiles` that own the HealthCheck that reported it. A resource reported by a HealthCheck no profile
+owns (for instance one created by hand) has no profiles and carries `healthCheckName` instead. It still counts for the
+cluster `state`. Profiles in the response are not filtered by what the user is allowed to get: a user who can get the cluster
+sees the health of every profile on it.
 
 ### Get profiles
 
