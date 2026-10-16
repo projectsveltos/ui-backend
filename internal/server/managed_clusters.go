@@ -22,6 +22,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"k8s.io/apimachinery/pkg/labels"
+
+	"github.com/projectsveltos/addon-controller/lib/healthmonitoring"
 )
 
 type ManagedCluster struct {
@@ -31,6 +33,9 @@ type ManagedCluster struct {
 	HasIssues             bool `json:"hasIssues"`
 	IsProvisioning        bool `json:"isProvisioning"`
 	HasOutdatedHelmCharts bool `json:"hasOutdatedHelmCharts"`
+	// HealthStatus is the health of the resources deployed to the cluster. Omitted when no
+	// profile matching the cluster has health monitoring enabled.
+	HealthStatus healthmonitoring.State `json:"healthStatus,omitempty"`
 }
 
 type ManagedClusters []ManagedCluster

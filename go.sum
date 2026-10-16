@@ -253,12 +253,12 @@ github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/projectsveltos/addon-controller v1.16.1-0.20261010095048-309e2f7326c1 h1:PQ35efIbUG3pVt1r+ZZLJA4OkmldJkGpwRc10NJipMM=
-github.com/projectsveltos/addon-controller v1.16.1-0.20261010095048-309e2f7326c1/go.mod h1:jIb2WFyeLn1sd91LNiJvyjaxLXe0lu/MbBA3yz5wqXQ=
+github.com/projectsveltos/addon-controller v1.16.1-0.20261016123050-6af08d74f90b h1:ug8ISBf7aDzNIPb/VxSlOjuT8be0dbcPPFabYcufti8=
+github.com/projectsveltos/addon-controller v1.16.1-0.20261016123050-6af08d74f90b/go.mod h1:yl26+ECdzLZi8suQsQqMAJ/BTBprrNthxA+o7LC5OrI=
 github.com/projectsveltos/event-manager v1.16.0 h1:/sWx1y1zZi/pYWQpCVUE4Cl34UL0tmVt2NXbl7G3O/g=
 github.com/projectsveltos/event-manager v1.16.0/go.mod h1:ZkeAyqvdcuqJCkAmhc4HMaq5ZGOBlf+6AhLhrgT3UKU=
-github.com/projectsveltos/libsveltos v1.16.1-0.20261007133830-d623a1556939 h1:yQuZm4uT19ZkdCPSU3hkheRszZOCXBEY4TILNudAm58=
-github.com/projectsveltos/libsveltos v1.16.1-0.20261007133830-d623a1556939/go.mod h1:wup25BAf1SHuG6FsY8D+tnm1U3/3NiuzcKec/In/fB4=
+github.com/projectsveltos/libsveltos v1.16.1-0.20261014064744-50f7977def53 h1:7RH3CeioAs44oednP7fME8cDn51tNVXJIZHWLaUYhdw=
+github.com/projectsveltos/libsveltos v1.16.1-0.20261014064744-50f7977def53/go.mod h1:wup25BAf1SHuG6FsY8D+tnm1U3/3NiuzcKec/In/fB4=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5 h1:khnc+994UszxZYu69J+R5FKiLA/Nk1JQj0EYAkwTWz0=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5/go.mod h1:yVL8KQFa9tmcxgwl9nwIMtKgtmIVC1zaFRSCfOwYvPY=
 github.com/projectsveltos/lua-utils/glua-runes v0.0.0-20251212200258-2b3cdcb7c0f5 h1:YbsebwRwTRhV8QacvEAdFqxcxHdeu7JTVtsBovbkgos=

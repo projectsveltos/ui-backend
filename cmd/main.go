@@ -146,6 +146,10 @@ func main() {
 			// ui-backend never reads managedFields; stripping them before they
 			// are committed to the cache significantly reduces its memory usage.
 			DefaultTransform: cache.TransformStripManagedFields(),
+			ByObject: map[client.Object]cache.ByObject{
+				// The collected resources of a report are never read and are the one large field.
+				&libsveltosv1beta1.HealthCheckReport{}: {Transform: server.TransformHealthCheckReport()},
+			},
 		},
 		PprofBindAddress: profilerAddress,
 	}
@@ -178,6 +182,8 @@ func main() {
 	startClusterSummaryController(mgr)
 	startClusterProfileController(mgr)
 	startProfileController(mgr)
+	startHealthCheckController(mgr)
+	startHealthCheckReportController(mgr)
 	//+kubebuilder:scaffold:builder
 
 	setupChecks(mgr)
@@ -424,6 +430,30 @@ func getClusterSummaryReconciler(mgr manager.Manager) *controller.ClusterSummary
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		ConcurrentReconciles: concurrentReconciles,
+	}
+}
+
+func startHealthCheckController(mgr manager.Manager) {
+	healthCheckReconciler := &controller.HealthCheckReconciler{
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		ConcurrentReconciles: concurrentReconciles,
+	}
+	if err := healthCheckReconciler.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "HealthCheck")
+		os.Exit(1)
+	}
+}
+
+func startHealthCheckReportController(mgr manager.Manager) {
+	healthCheckReportReconciler := &controller.HealthCheckReportReconciler{
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		ConcurrentReconciles: concurrentReconciles,
+	}
+	if err := healthCheckReportReconciler.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "HealthCheckReport")
+		os.Exit(1)
 	}
 }
 

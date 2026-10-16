@@ -360,10 +360,60 @@ var (
 			return
 		}
 
+		health := manager.GetClusterHealth(clusterType, namespace, name)
+		setProfileHealthStatus(result, profileHealthStates(&health))
+
 		c.JSON(http.StatusOK, gin.H{
 			"totalResources": len(flattenedProfileStatuses),
 			"profiles":       result,
 		})
+	}
+
+	getClusterHealth = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get not healthy resources of a cluster")
+
+		namespace, name, clusterType := getClusterFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s:%s/%s", clusterType, namespace, name))
+
+		limit, skip := getLimitAndSkipFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("limit %d skip %d", limit, skip))
+
+		profileFilters := getProfileFiltersFromQuery(c)
+		resourceFilters := getResourceFiltersFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("filters: profile kind %q namespace %q name %q, "+
+			"resource kind %q namespace %q name %q",
+			profileFilters.Kind, profileFilters.Namespace, profileFilters.Name,
+			resourceFilters.Kind, resourceFilters.Namespace, resourceFilters.Name))
+
+		user, groups, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		canGetCluster, err := manager.canGetCluster(namespace, name, user, groups, clusterType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if !canGetCluster {
+			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this cluster"))
+			return
+		}
+
+		result, err := manager.getClusterHealthResult(clusterType, namespace, name,
+			profileFilters, resourceFilters, limit, skip)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
 	}
 
 	getProfiles = func(c *gin.Context) {
@@ -1180,6 +1230,8 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/resources", getDeployedResources)
 	// Return the specified cluster status
 	r.GET("/getClusterStatus", getClusterStatus)
+	// Return the not healthy resources of the specified cluster
+	r.GET("/clusterHealth", getClusterHealth)
 	// Return existing ClusterProfiles/Profiles
 	r.GET("/profiles", getProfiles)
 	// Return details about a ClusterProfile/Profile
@@ -1272,6 +1324,7 @@ func getManagedClusterData(clusters map[corev1.ObjectReference]ClusterInfo, filt
 			HasIssues:             manager.ClusterHasIssues(clusterType, k.Namespace, k.Name),
 			IsProvisioning:        manager.ClusterIsProvisioning(clusterType, k.Namespace, k.Name),
 			HasOutdatedHelmCharts: manager.ClusterHasOutdatedHelmCharts(clusterType, k.Namespace, k.Name),
+			HealthStatus:          manager.ClusterHealthStatus(clusterType, k.Namespace, k.Name),
 		})
 	}
 
