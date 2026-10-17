@@ -155,6 +155,8 @@ func (m *instance) GetImpersonatedClient(token string) (client.Client, error) {
 	return m.getImpersonatedClient(token)
 }
 
+type ResourceFilters = resourceFilters
+
 var (
 	ValidateProfileIdentity   = validateProfileIdentity
 	ValidateCreateContent     = validateCreateContent
@@ -248,7 +250,8 @@ var (
 
 	ExamineClusterConditions = examineClusterConditions
 
-	GetEventClusterDetails = getEventClusterDetails
+	GetEventClusterDetails    = getEventClusterDetails
+	GetEventMatchingResources = getEventMatchingResources
 
 	GetProfileData = getProfileData
 
