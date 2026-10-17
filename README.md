@@ -73,10 +73,11 @@ returns
 }
 ```
 
-Each cluster also carries `healthStatus`, the health of the resources Sveltos deployed to it, when at least one profile
-matching the cluster has `spec.healthMonitoring.enabled` set. Values are `NoData` (no report yet), `Healthy`, `Suspended`,
-`Progressing` and `Degraded` (the worst status of all monitored resources). The field is omitted when no profile monitors the
-cluster. To see which resources are not healthy, use [/clusterHealth](#get-the-unhealthy-resources-of-a-cluster).
+Each cluster also carries `healthStatus`, the health of the resources covered by health reports, when at least one profile
+matching the cluster has `spec.healthMonitoring.enabled` set or at least one health report exists for the cluster (for
+instance one produced by a HealthCheck created by hand). Values are `NoData` (monitoring is enabled but no report yet),
+`Healthy`, `Suspended`, `Progressing` and `Degraded` (the worst status of all listed resources). The field is omitted when
+nothing monitors the cluster. To see which resources are not healthy, use [/clusterHealth](#get-the-unhealthy-resources-of-a-cluster).
 
 This API supports pagination. Use:
 
@@ -311,14 +312,15 @@ the profile deployed on this cluster (`NoData`, `Healthy`, `Suspended`, `Progres
 
 where cluster type can either be __capi__ for ClusterAPI powered clusters or __sveltos__ for SveltosClusters
 
-Returns the resources of the cluster that are not Healthy, as reported by health monitoring (profiles with
-`spec.healthMonitoring.enabled`). The user needs permission to get the cluster.
+Returns the resources of the cluster that are not Healthy, as reported by health reports: the ones of profiles with
+`spec.healthMonitoring.enabled` and the ones of any other HealthCheck. Resources owned by a profile are listed first, then
+the others; within each group the worst status comes first. The user needs permission to get the cluster.
 
 It is also possible to filter by:
 
-1. `profile_kind` => only resources reported for profiles of this kind (`ClusterProfile` or `Profile`)
-2. `profile_namespace` => only resources reported for profiles in this namespace
-3. `profile_name` => only resources reported for the profile with this name
+1. `profile_kind` => only resources reported for profiles whose kind contains the specified string (`ClusterProfile` or `Profile`)
+2. `profile_namespace` => only resources reported for profiles in a namespace whose name contains the specified string
+3. `profile_name` => only resources reported for profiles whose name contains the specified string
 4. `resource_kind` => only resources whose kind contains the specified string
 5. `resource_namespace` => only resources in a namespace whose name contains the specified string
 6. `resource_name` => only resources whose name contains the specified string
@@ -372,13 +374,16 @@ returns
 }
 ```
 
-`state` is the health of the whole cluster, so an empty list is explained: `NotEnabled` (no profile monitors the cluster),
-`NoData` (monitoring is enabled but no report has been received yet), `Healthy`, `Suspended`, `Progressing` or `Degraded`.
+`state` is the health of the whole cluster, so an empty list is explained: `NotEnabled` (no profile has monitoring enabled and
+no health report exists), `NoData` (monitoring is enabled but no report has been received yet), `Healthy`, `Suspended`,
+`Progressing` or `Degraded`.
 `state` is not affected by the filters or by pagination.
 
 Each resource lists the `profiles` that own the HealthCheck that reported it. A resource reported by a HealthCheck no profile
-owns (for instance one created by hand) has no profiles and carries `healthCheckName` instead. It still counts for the
-cluster `state`. Profiles in the response are not filtered by what the user is allowed to get: a user who can get the cluster
+owns (for instance one created by hand) has no profiles and carries `healthCheckName` instead. It is listed, and counts for
+the cluster `state`, even when no profile has monitoring enabled. When a resource is reported by several HealthChecks it is
+listed once: if a profile owns one of the reports, the status and message are the ones of the reports owned by profiles;
+otherwise the worst status wins. Profiles in the response are not filtered by what the user is allowed to get: a user who can get the cluster
 sees the health of every profile on it.
 
 ### Get profiles

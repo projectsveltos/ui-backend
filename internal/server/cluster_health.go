@@ -49,8 +49,8 @@ type ClusterHealthResource struct {
 
 // ClusterHealthResult is the response of /clusterHealth.
 type ClusterHealthResult struct {
-	// State is the health state of the cluster: NotEnabled (no profile monitors it), NoData,
-	// Healthy, Suspended, Progressing or Degraded.
+	// State is the health state of the cluster: NotEnabled (no profile has monitoring enabled and
+	// no health report exists), NoData, Healthy, Suspended, Progressing or Degraded.
 	State          healthmonitoring.State  `json:"state"`
 	TotalResources int                     `json:"totalResources"`
 	Resources      []ClusterHealthResource `json:"resources"`
@@ -64,7 +64,7 @@ type healthProfileKey struct {
 }
 
 // getClusterHealthResult returns the health of a cluster: the not Healthy resources, filtered
-// and paginated, worst status first. The profile filters match exactly; a resource no profile
+// and paginated: the ones owned by a profile first, then the others, worst status first. The profile filters match; a resource no profile
 // owns never matches a profile filter.
 func (m *instance) getClusterHealthResult(clusterType libsveltosv1beta1.ClusterType,
 	clusterNamespace, clusterName string, profile *profileFilters, resource *resourceFilters,
@@ -143,15 +143,17 @@ func containsFold(value, filter string) bool {
 	return strings.Contains(strings.ToLower(value), strings.ToLower(filter))
 }
 
+// matchesProfileFilters follows /getClusterStatus: a case insensitive substring match on each filter set. A resource
+// no profile owns never matches when a profile filter is set.
 func matchesProfileFilters(health *ClusterHealthResource, filters *profileFilters) bool {
 	if filters.Kind == "" && filters.Namespace == "" && filters.Name == "" {
 		return true
 	}
 
 	for _, profile := range health.Profiles {
-		if (filters.Kind == "" || strings.EqualFold(profile.Kind, filters.Kind)) &&
-			(filters.Namespace == "" || profile.Namespace == filters.Namespace) &&
-			(filters.Name == "" || profile.Name == filters.Name) {
+		if containsFold(profile.Kind, filters.Kind) &&
+			containsFold(profile.Namespace, filters.Namespace) &&
+			containsFold(profile.Name, filters.Name) {
 
 			return true
 		}

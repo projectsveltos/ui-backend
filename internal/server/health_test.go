@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -188,14 +189,44 @@ var _ = Describe("Health monitoring", func() {
 		f.summary.Spec.ClusterProfileSpec.HealthMonitoring.Enabled = false
 		f.apply(manager, addSummary)
 
+		// The report stays: its resources are still listed, no longer attributed to the profile
+		Expect(manager.ClusterHealthStatus(capi, f.clusterNamespace, f.clusterName)).
+			To(Equal(healthmonitoring.StateDegraded))
+		health := manager.GetClusterHealth(capi, f.clusterNamespace, f.clusterName)
+		Expect(health.Profiles).To(BeEmpty())
+		Expect(health.Resources).To(HaveLen(1))
+		Expect(health.Resources[0].Profiles).To(BeEmpty())
+
+		By("removing the report: nothing is monitored anymore")
+		manager.RemoveHealthCheckReport(f.report.Namespace, f.report.Name)
 		Expect(manager.ClusterHealthStatus(capi, f.clusterNamespace, f.clusterName)).To(BeEmpty())
-		Expect(manager.GetClusterHealth(capi, f.clusterNamespace, f.clusterName).Profiles).To(BeEmpty())
+		Expect(manager.GetClusterHealth(capi, f.clusterNamespace, f.clusterName).Resources).To(BeEmpty())
 
 		By("switching it on again")
+		f.apply(manager, addReport)
 		f.summary.Spec.ClusterProfileSpec.HealthMonitoring.Enabled = true
 		f.apply(manager, addSummary)
 		Expect(manager.ClusterHealthStatus(capi, f.clusterNamespace, f.clusterName)).
 			To(Equal(healthmonitoring.StateDegraded))
+	})
+
+	It("reports the health of a cluster no profile monitors when HealthCheckReports exist for it", func() {
+		f := newHealthFixture(resourceStatus(deploymentKind, "web", libsveltosv1beta1.HealthStatusDegraded, "bad"))
+		f.apply(manager, addReport)
+
+		Expect(manager.ClusterHealthStatus(capi, f.clusterNamespace, f.clusterName)).
+			To(Equal(healthmonitoring.StateDegraded))
+
+		result, err := manager.GetClusterHealthResult(capi, f.clusterNamespace, f.clusterName, "", "", "", 10, 0)
+		Expect(err).To(BeNil())
+		Expect(result.State).To(Equal(healthmonitoring.StateDegraded))
+		Expect(result.TotalResources).To(Equal(1))
+		Expect(result.Resources[0].Profiles).To(BeEmpty())
+		Expect(result.Resources[0].HealthCheckName).To(Equal(f.healthCheck.Name))
+
+		By("removing the report")
+		manager.RemoveHealthCheckReport(f.report.Namespace, f.report.Name)
+		Expect(manager.ClusterHealthStatus(capi, f.clusterNamespace, f.clusterName)).To(BeEmpty())
 	})
 
 	It("reports NoData when monitoring is enabled and no report exists", func() {
@@ -287,13 +318,19 @@ var _ = Describe("Health monitoring", func() {
 		Expect(result.Resources[0].Profiles).To(BeEmpty())
 	})
 
-	It("clears the health status when the ClusterSummary is removed", func() {
+	It("clears the health status when the ClusterSummary and its report are removed", func() {
 		f := newHealthFixture(resourceStatus(deploymentKind, "web", libsveltosv1beta1.HealthStatusDegraded, ""))
 		f.apply(manager, addSummary)
 		f.apply(manager, addCheck)
 		f.apply(manager, addReport)
 
+		// While the report exists the cluster keeps a state: the resource is no longer attributed to a profile
 		manager.RemoveClusterProfileStatus(f.summary.Namespace, f.summary.Name)
+		Expect(manager.ClusterHealthStatus(capi, f.clusterNamespace, f.clusterName)).
+			To(Equal(healthmonitoring.StateDegraded))
+		Expect(manager.GetClusterHealth(capi, f.clusterNamespace, f.clusterName).Profiles).To(BeEmpty())
+
+		manager.RemoveHealthCheckReport(f.report.Namespace, f.report.Name)
 		Expect(manager.ClusterHealthStatus(capi, f.clusterNamespace, f.clusterName)).To(BeEmpty())
 	})
 
@@ -351,6 +388,12 @@ var _ = Describe("Health monitoring", func() {
 		Expect(err).To(BeNil())
 		Expect(result.TotalResources).To(BeZero())
 		Expect(result.Resources).ToNot(BeNil())
+
+		By("matching part of the profile kind and name, whatever the case")
+		result, err = manager.GetClusterHealthResult(capi, f.clusterNamespace, f.clusterName,
+			"clusterprof", strings.ToUpper(f.profileName[:len(f.profileName)-2]), "", 10, 0)
+		Expect(err).To(BeNil())
+		Expect(result.TotalResources).To(Equal(3))
 
 		_, err = manager.GetClusterHealthResult(capi, f.clusterNamespace, f.clusterName, "", "", "", 10, -1)
 		Expect(err).ToNot(BeNil())
