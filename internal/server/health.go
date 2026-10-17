@@ -101,7 +101,8 @@ type healthCache struct {
 	// reportsByCluster: cluster key -> HealthCheckReports of that cluster
 	reportsByCluster clusterSets
 
-	// clusterStatus: cluster key -> health state. No entry when no profile of the cluster has monitoring enabled.
+	// clusterStatus: cluster key -> health state. No entry when no profile of the cluster has monitoring
+	// enabled and no report exists.
 	clusterStatus map[string]healthmonitoring.State
 }
 
@@ -223,7 +224,8 @@ func (h *healthCache) removeReport(ref *corev1.ObjectReference) {
 	h.recompute(existing.clusterKey)
 }
 
-// state returns the health state of a cluster, and false when no profile of the cluster has monitoring enabled.
+// state returns the health state of a cluster, and false when nothing monitors it: no profile
+// with monitoring enabled and no report.
 func (h *healthCache) state(clusterKey string) (healthmonitoring.State, bool) {
 	h.mux.RLock()
 	defer h.mux.RUnlock()
@@ -327,7 +329,7 @@ func (m *instance) addHealthSummary(summary *configv1beta1.ClusterSummary, csRef
 }
 
 // ClusterHealthStatus returns the health state of a cluster. Empty when no profile of the
-// cluster has health monitoring enabled.
+// cluster has health monitoring enabled and no health report exists for it.
 func (m *instance) ClusterHealthStatus(clusterType libsveltosv1beta1.ClusterType,
 	clusterNamespace, clusterName string) healthmonitoring.State {
 

@@ -210,6 +210,28 @@ var _ = Describe("Health monitoring", func() {
 		Expect(err).To(BeNil())
 		Expect(health.State).To(Equal(healthmonitoring.StateNotEnabled))
 		Expect(health.Resources).To(BeEmpty())
+
+		Byf("Creating a report of a HealthCheck no profile owns, with no profile monitoring the cluster")
+		unmonitored := newHealthCheckReport(unclaimedHealthCheckName,
+			newResourceStatus(appsv1.SchemeGroupVersion.String(), "DaemonSet", randomString(),
+				libsveltosv1beta1.HealthStatusDegraded, "not ready"))
+		Expect(k8sClient.Create(context.TODO(), unmonitored)).To(Succeed())
+		defer deleteIgnoringNotFound(unmonitored)
+
+		Byf("Verifying the resource is listed and the cluster has a health state")
+		expectClusterHealthState(localPort, token, healthmonitoring.StateDegraded)
+		health, err = getClusterHealth(localPort, token, "")
+		Expect(err).To(BeNil())
+		Expect(health.Resources).To(HaveLen(1))
+		Expect(health.Resources[0].Profiles).To(BeEmpty())
+		Expect(health.Resources[0].HealthCheckName).To(Equal(unclaimedHealthCheckName))
+
+		Byf("Deleting the report: nothing is monitored anymore")
+		Expect(k8sClient.Delete(context.TODO(), unmonitored)).To(Succeed())
+		expectClusterHealthState(localPort, token, "")
+		health, err = getClusterHealth(localPort, token, "")
+		Expect(err).To(BeNil())
+		Expect(health.State).To(Equal(healthmonitoring.StateNotEnabled))
 	})
 })
 
