@@ -691,6 +691,83 @@ var (
 		c.JSON(http.StatusOK, details)
 	}
 
+	getEventResources = func(c *gin.Context) {
+		ginLogger.V(logs.LogDebug).Info("get the resources matching an EventTrigger in a cluster")
+
+		eventTriggerName := c.Query("event_name")
+		if eventTriggerName == "" {
+			msg := "event_name is required"
+			ginLogger.V(logs.LogInfo).Info(msg)
+			_ = c.AbortWithError(http.StatusBadRequest, errors.New(msg))
+			return
+		}
+
+		namespace, name, clusterType := getClusterFromQuery(c)
+		if clusterType == "" {
+			// getClusterFromQuery already wrote the error
+			return
+		}
+
+		limit, skip := getLimitAndSkipFromQuery(c)
+		resourceFilters := getResourceFiltersFromQuery(c)
+		ginLogger.V(logs.LogDebug).Info(fmt.Sprintf("eventTrigger %q cluster %s:%s/%s limit %d skip %d "+
+			"filters: resource kind %q namespace %q name %q", eventTriggerName, clusterType, namespace, name,
+			limit, skip, resourceFilters.Kind, resourceFilters.Namespace, resourceFilters.Name))
+
+		user, groups, err := validateToken(c)
+		if err != nil {
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		manager := GetManagerInstance()
+
+		canListEventTriggers, err := manager.canListEventTriggers(user, groups)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+
+		if !canListEventTriggers {
+			canGetEventTrigger, err := manager.canGetEventTrigger(eventTriggerName, user, groups)
+			if err != nil {
+				ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+				_ = c.AbortWithError(http.StatusUnauthorized, err)
+				return
+			}
+			if !canGetEventTrigger {
+				_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this eventTrigger"))
+				return
+			}
+		}
+
+		canGetCluster, err := manager.canGetCluster(namespace, name, user, groups, clusterType)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify permissions %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusUnauthorized, err)
+			return
+		}
+		if !canGetCluster {
+			_ = c.AbortWithError(http.StatusUnauthorized, errors.New("no permissions to access this cluster"))
+			return
+		}
+
+		result, err := getEventMatchingResources(c.Request.Context(), manager.client, eventTriggerName,
+			clusterType, namespace, name, resourceFilters, limit, skip, ginLogger)
+		if err != nil {
+			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("bad request %s: %v", c.Request.URL, err))
+			_ = c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
+		if result == nil {
+			_ = c.AbortWithError(http.StatusNotFound, errors.New("eventTrigger not found"))
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
+	}
+
 	getClassifiers = func(c *gin.Context) {
 		ginLogger.V(logs.LogDebug).Info("get classifiers")
 
@@ -1246,6 +1323,8 @@ func (m *instance) start(ctx context.Context, port string, logger logr.Logger) {
 	r.GET("/events", getEvents)
 	// Return details about a specific EventTrigger
 	r.GET("/event", getEvent)
+	// Return the resources matching the EventSource of a specific EventTrigger in a cluster, paginated
+	r.GET("/eventResources", getEventResources)
 	// Return existing Classifiers and ManagementClusterClassifiers
 	r.GET("/classifiers", getClassifiers)
 	// Return details about a specific Classifier or ManagementClusterClassifier

@@ -770,10 +770,36 @@ Response contains:
 - Name: name of the eventTrigger
 - clusterSelector: eventTrigger's clusterSelector
 - referenced EventSource
-- MatchingClusters: list of clusters matching this profile. This list contains *only* the clusters users has permission for. For each cluster, list of resources matching the event
+- MatchingClusters: list of clusters matching this profile. This list contains *only* the clusters users has permission for. For each cluster, `matchingResourcesCount` is the number of resources matching the event. To list those resources use [/eventResources](#get-the-resources-matching-an-eventtrigger-in-a-cluster)
 
 ```json
-{"eventTriggerName":"service-network-policy","clusterSelector":{"matchLabels":{"env":"fv"}},"eventSource":{"kind":"EventSource","apiVersion":"lib.projectsveltos.io/v1beta1","metadata":{"name":"sveltos-service"},"spec":{"resourceSelectors":[{"group":"","version":"v1","kind":"Service","labelFilters":[{"key":"sveltos","operation":"Equal","value":"fv"}]}],"collectResources":true}},"clusterEventMatches":[{"clusterNamespace":"default","clusterName":"clusterapi-workload","clusterKind":"Cluster","labels":{"cluster.x-k8s.io/cluster-name":"clusterapi-workload","env":"fv","sveltos-agent":"present","topology.cluster.x-k8s.io/owned":""},"version":"v1.35.0","ready":true,"paused":true,"failureMessage":null,"resources":[{"name":"my-service","namespace":"default","group":"","kind":"Service","version":"","profileNames":null}]}]}
+{"eventTriggerName":"service-network-policy","clusterSelector":{"matchLabels":{"env":"fv"}},"eventSource":{"kind":"EventSource","apiVersion":"lib.projectsveltos.io/v1beta1","metadata":{"name":"sveltos-service"},"spec":{"resourceSelectors":[{"group":"","version":"v1","kind":"Service","labelFilters":[{"key":"sveltos","operation":"Equal","value":"fv"}]}],"collectResources":true}},"clusterEventMatches":[{"clusterNamespace":"default","clusterName":"clusterapi-workload","clusterKind":"Cluster","labels":{"cluster.x-k8s.io/cluster-name":"clusterapi-workload","env":"fv","sveltos-agent":"present","topology.cluster.x-k8s.io/owned":""},"version":"v1.35.0","ready":true,"paused":true,"failureMessage":null,"matchingResourcesCount":1}]}
+```
+
+### Get the resources matching an EventTrigger in a cluster
+
+```/eventResources?event_name=<eventTrigger name>&namespace=<cluster-namespace>&name=<cluster-name>&type=<cluster-type>```
+
+where cluster type can either be __capi__ for ClusterAPI powered clusters or __sveltos__ for SveltosClusters
+
+Returns the resources of the cluster matching the EventSource of the EventTrigger. The user needs permission to get both the EventTrigger and the cluster. Resources are ordered by group, kind, namespace and name.
+
+It is also possible to filter by:
+
+1. `resource_kind` => only resources whose kind contains the specified string
+2. `resource_namespace` => only resources in a namespace whose name contains the specified string
+3. `resource_name` => only resources whose name contains the specified string
+
+This API supports pagination. Use:
+
+. ```limit=<int>``` to specify the number of resources the API will return
+
+. ```skip=<int>``` to specify from which resource to start
+
+`totalResources` is the number of resources matching the filters, before pagination.
+
+```json
+{"totalResources":1,"resources":[{"name":"my-service","namespace":"default","group":"","kind":"Service","version":"","profileNames":null}]}
 ```
 
 ### Get list of Classifiers

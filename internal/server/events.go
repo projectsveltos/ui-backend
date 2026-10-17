@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -187,7 +188,9 @@ type ClusterEventMatch struct {
 	ClusterName      string `json:"clusterName"`
 	ClusterKind      string `json:"clusterKind"`
 	ClusterInfo
-	Resources []Resource `json:"resources,omitempty"`
+	// MatchingResourcesCount is the number of resources matching the EventSource in the cluster.
+	// The resources are served, paginated, by /eventResources.
+	MatchingResourcesCount int `json:"matchingResourcesCount"`
 }
 
 type EventTriggerDetails struct {
@@ -199,7 +202,7 @@ type EventTriggerDetails struct {
 
 // Returns a detailed view of an EventTrigger. This includes:
 // - Referenced EventSource YAML
-// - List of matching clusters (including matching resources in each cluster)
+// - List of matching clusters (including the number of matching resources in each cluster)
 func (m *instance) GetEventTriggerDetails(ctx context.Context, eventTriggerName string,
 	capiClusters, sveltosClusters map[corev1.ObjectReference]ClusterInfo, logger logr.Logger,
 ) (*EventTriggerDetails, error) {
@@ -276,31 +279,132 @@ func getEventClusterDetails(ctx context.Context, c client.Client, eventSourceNam
 		ClusterInfo:      clusterInfo,
 	}
 
-	clusterType := clusterproxy.GetClusterType(cluster)
-	eventReportName := libsveltosv1beta1.GetEventReportName(eventSourceName, cluster.Name, &clusterType)
+	eventReport, err := getEventReport(ctx, c, eventSourceName, clusterproxy.GetClusterType(cluster),
+		cluster.Namespace, cluster.Name, logger)
+	if err != nil {
+		return nil, err
+	}
+	if eventReport != nil {
+		result.MatchingResourcesCount = len(eventReport.Spec.MatchingResources)
+	}
+
+	return result, nil
+}
+
+// getEventReport returns the EventReport of an EventSource for a cluster, nil if it does not exist.
+func getEventReport(ctx context.Context, c client.Client, eventSourceName string,
+	clusterType libsveltosv1beta1.ClusterType, clusterNamespace, clusterName string,
+	logger logr.Logger) (*libsveltosv1beta1.EventReport, error) {
+
+	eventReportName := libsveltosv1beta1.GetEventReportName(eventSourceName, clusterName, &clusterType)
 
 	eventReport := &libsveltosv1beta1.EventReport{}
 	err := c.Get(ctx,
-		types.NamespacedName{Namespace: cluster.Namespace, Name: eventReportName},
+		types.NamespacedName{Namespace: clusterNamespace, Name: eventReportName},
 		eventReport)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return result, nil
+			return nil, nil
 		}
 		logger.V(logs.LogInfo).Error(err, "failed to get eventReport")
 		return nil, err
 	}
 
-	result.Resources = make([]Resource, len(eventReport.Spec.MatchingResources))
-	for i := range eventReport.Spec.MatchingResources {
-		gvk := schema.FromAPIVersionAndKind(eventReport.Spec.MatchingResources[i].APIVersion,
-			eventReport.Spec.MatchingResources[i].Kind)
+	return eventReport, nil
+}
 
-		result.Resources[i].Namespace = eventReport.Spec.MatchingResources[i].Namespace
-		result.Resources[i].Name = eventReport.Spec.MatchingResources[i].Name
-		result.Resources[i].Kind = eventReport.Spec.MatchingResources[i].Kind
-		result.Resources[i].Group = gvk.Group
+// EventResourcesResult is the response of /eventResources.
+type EventResourcesResult struct {
+	// TotalResources is the number of resources matching the filters, before pagination.
+	TotalResources int        `json:"totalResources"`
+	Resources      []Resource `json:"resources"`
+}
+
+// getEventMatchingResources returns the resources matching the EventSource of an EventTrigger in a cluster:
+// filtered (a case insensitive substring match on kind, namespace and name), ordered by group, kind,
+// namespace and name, then paginated. Returns nil when the EventTrigger or its EventSource does not exist.
+func getEventMatchingResources(ctx context.Context, c client.Client, eventTriggerName string,
+	clusterType libsveltosv1beta1.ClusterType, clusterNamespace, clusterName string,
+	filters *resourceFilters, limit, skip int, logger logr.Logger) (*EventResourcesResult, error) {
+
+	eventTrigger := &eventv1beta1.EventTrigger{}
+	err := c.Get(ctx, types.NamespacedName{Name: eventTriggerName}, eventTrigger)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		logger.V(logs.LogInfo).Error(err, "failed to get eventTrigger")
+		return nil, err
 	}
 
-	return result, nil
+	eventReport, err := getEventReport(ctx, c, eventTrigger.Spec.EventSourceName, clusterType,
+		clusterNamespace, clusterName, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	var resources []Resource
+	if eventReport != nil {
+		resources = newEventResources(eventReport.Spec.MatchingResources)
+	}
+	resources = filterEventResources(resources, filters)
+	sortEventResources(resources)
+
+	page, err := getSliceInRange(resources, limit, skip)
+	if err != nil {
+		return nil, err
+	}
+	if page == nil {
+		page = []Resource{}
+	}
+
+	return &EventResourcesResult{TotalResources: len(resources), Resources: page}, nil
+}
+
+func newEventResources(references []corev1.ObjectReference) []Resource {
+	resources := make([]Resource, len(references))
+	for i := range references {
+		gvk := schema.FromAPIVersionAndKind(references[i].APIVersion, references[i].Kind)
+
+		resources[i].Namespace = references[i].Namespace
+		resources[i].Name = references[i].Name
+		resources[i].Kind = references[i].Kind
+		resources[i].Group = gvk.Group
+	}
+
+	return resources
+}
+
+func filterEventResources(resources []Resource, filters *resourceFilters) []Resource {
+	if filters == nil || (filters.Kind == "" && filters.Namespace == "" && filters.Name == "") {
+		return resources
+	}
+
+	filtered := make([]Resource, 0, len(resources))
+	for i := range resources {
+		if containsFold(resources[i].Kind, filters.Kind) &&
+			containsFold(resources[i].Namespace, filters.Namespace) &&
+			containsFold(resources[i].Name, filters.Name) {
+
+			filtered = append(filtered, resources[i])
+		}
+	}
+
+	return filtered
+}
+
+func sortEventResources(resources []Resource) {
+	sort.SliceStable(resources, func(i, j int) bool {
+		a, b := &resources[i], &resources[j]
+		if a.Group != b.Group {
+			return a.Group < b.Group
+		}
+		if a.Kind != b.Kind {
+			return a.Kind < b.Kind
+		}
+		if a.Namespace != b.Namespace {
+			return a.Namespace < b.Namespace
+		}
+		return a.Name < b.Name
+	})
 }
