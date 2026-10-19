@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -225,11 +226,12 @@ func (m *instance) isCAPIInstalled(ctx context.Context) (bool, error) {
 func (m *instance) GetManagedSveltosClusters(ctx context.Context, canListAll bool, user string, groups []string,
 ) (map[corev1.ObjectReference]ClusterInfo, error) {
 
-	// If user can list all SveltosClusters, return cached data
+	// If user can list all SveltosClusters, return a copy of the cached data. The map is read by the
+	// caller after the lock is released, while the SveltosCluster controller keeps updating it.
 	if canListAll {
 		m.clusterMux.RLock()
 		defer m.clusterMux.RUnlock()
-		return m.sveltosClusters, nil
+		return maps.Clone(m.sveltosClusters), nil
 	}
 
 	// If user cannot list all SveltosClusters, run a List so to get only SveltosClusters user has access to
@@ -269,11 +271,12 @@ func (m *instance) GetManagedSveltosClusters(ctx context.Context, canListAll boo
 func (m *instance) GetManagedCAPIClusters(ctx context.Context, canListAll bool, user string, groups []string,
 ) (map[corev1.ObjectReference]ClusterInfo, error) {
 
-	// If user can list all CAPI Clusters, return cached data
+	// If user can list all CAPI Clusters, return a copy of the cached data. The map is read by the
+	// caller after the lock is released, while the Cluster controller keeps updating it.
 	if canListAll {
 		m.clusterMux.RLock()
 		defer m.clusterMux.RUnlock()
-		return m.capiClusters, nil
+		return maps.Clone(m.capiClusters), nil
 	}
 
 	// ClusterAPI is optional. If its Cluster CRD isn't installed, there are no CAPI clusters
@@ -324,7 +327,7 @@ func (m *instance) GetManagedCAPIClusters(ctx context.Context, canListAll bool, 
 func (m *instance) GetClusterProfileStatuses() map[corev1.ObjectReference]ClusterProfileStatus {
 	m.clusterStatusesMux.RLock()
 	defer m.clusterStatusesMux.RUnlock()
-	return m.clusterSummaryReport
+	return maps.Clone(m.clusterSummaryReport)
 }
 
 func (m *instance) GetClusterProfileStatusesByCluster(
@@ -748,9 +751,7 @@ func (m *instance) GetProfiles(ctx context.Context, canListClusterProfiles, canL
 ) (map[corev1.ObjectReference]ProfileInfo, error) {
 
 	if canListClusterProfiles && canListProfiles {
-		m.profileMux.RLock()
-		defer m.profileMux.RUnlock()
-		return m.profiles, nil
+		return m.getCopyOfProfiles(), nil
 	}
 
 	// To avoid blocking on lock, get a copy of cached profiles and from this point on use only the copied version

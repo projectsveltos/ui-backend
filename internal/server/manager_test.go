@@ -1014,6 +1014,8 @@ var _ = Describe("Manager", func() {
 		Expect(profileInfo.Dependents.Items()).To(ContainElement(*profile1))
 
 		manager.RemoveProfile(profile1)
+		profiles, err = manager.GetProfiles(context.TODO(), true, true, randomString(), nil)
+		Expect(err).To(BeNil())
 		profileInfo, ok = profiles[*profile1]
 		Expect(ok).To(BeFalse())
 
@@ -1070,5 +1072,125 @@ var _ = Describe("Manager", func() {
 		Expect(len(result)).To(Equal(1))
 		Expect(result[tier][0].Name).To(Equal(profile1.Name))
 		Expect(result[tier][0].Namespace).To(Equal(profile1.Namespace))
+	})
+	// The maps returned by the getters are read by the HTTP handlers after the manager lock is released,
+	// while the controllers keep updating the cache. They must be copies of the cache.
+	Context("Returned maps are copies of the cache", func() {
+		BeforeEach(func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			DeferCleanup(cancel)
+
+			server.InitializeManagerInstance(ctx, nil, c, scheme, randomPort(), logger)
+		})
+
+		It("GetManagedSveltosClusters is not affected by later updates of the cache", func() {
+			manager := server.GetManagerInstance()
+			clusterRef := corev1.ObjectReference{
+				Namespace:  sveltosCluster.Namespace,
+				Name:       sveltosCluster.Name,
+				Kind:       libsveltosv1beta1.SveltosClusterKind,
+				APIVersion: libsveltosv1beta1.GroupVersion.String(),
+			}
+
+			manager.AddSveltosCluster(sveltosCluster)
+			clusters, err := manager.GetManagedSveltosClusters(context.TODO(), true, randomString(), nil)
+			Expect(err).To(BeNil())
+			Expect(clusters).To(HaveKey(clusterRef))
+
+			manager.RemoveSveltosCluster(sveltosCluster.Namespace, sveltosCluster.Name)
+			Expect(clusters).To(HaveKey(clusterRef))
+		})
+
+		It("GetManagedCAPIClusters is not affected by later updates of the cache", func() {
+			manager := server.GetManagerInstance()
+			clusterRef := corev1.ObjectReference{
+				Namespace:  cluster.Namespace,
+				Name:       cluster.Name,
+				Kind:       clusterv1.ClusterKind,
+				APIVersion: clusterv1.GroupVersion.String(),
+			}
+
+			manager.AddCAPICluster(cluster)
+			clusters, err := manager.GetManagedCAPIClusters(context.TODO(), true, randomString(), nil)
+			Expect(err).To(BeNil())
+			Expect(clusters).To(HaveKey(clusterRef))
+
+			manager.RemoveCAPICluster(cluster.Namespace, cluster.Name)
+			Expect(clusters).To(HaveKey(clusterRef))
+		})
+
+		It("GetClusterProfileStatuses is not affected by later updates of the cache", func() {
+			manager := server.GetManagerInstance()
+			clusterSummaryRef := corev1.ObjectReference{
+				Namespace:  properClusterSummary.Namespace,
+				Name:       properClusterSummary.Name,
+				Kind:       configv1beta1.ClusterSummaryKind,
+				APIVersion: configv1beta1.GroupVersion.String(),
+			}
+
+			manager.AddClusterProfileStatus(properClusterSummary)
+			statuses := manager.GetClusterProfileStatuses()
+			Expect(statuses).To(HaveKey(clusterSummaryRef))
+
+			manager.RemoveClusterProfileStatus(properClusterSummary.Namespace, properClusterSummary.Name)
+			Expect(statuses).To(HaveKey(clusterSummaryRef))
+		})
+
+		It("GetProfiles is not affected by later updates of the cache", func() {
+			manager := server.GetManagerInstance()
+			profile := &corev1.ObjectReference{
+				Namespace:  randomString(),
+				Name:       randomString(),
+				Kind:       configv1beta1.ProfileKind,
+				APIVersion: configv1beta1.GroupVersion.String(),
+			}
+
+			manager.AddProfile(profile, libsveltosv1beta1.Selector{}, int32(10), configv1beta1.SyncModeContinuous, nil)
+			profiles, err := manager.GetProfiles(context.TODO(), true, true, randomString(), nil)
+			Expect(err).To(BeNil())
+			Expect(profiles).To(HaveKey(*profile))
+
+			manager.RemoveProfile(profile)
+			Expect(profiles).To(HaveKey(*profile))
+		})
+
+		It("GetManagedSveltosClusters can be iterated while the cache is updated", func() {
+			manager := server.GetManagerInstance()
+
+			const numClusters = 50
+			for i := 0; i < numClusters; i++ {
+				extraCluster := sveltosCluster.DeepCopy()
+				extraCluster.Name = randomString()
+				manager.AddSveltosCluster(extraCluster)
+				DeferCleanup(manager.RemoveSveltosCluster, extraCluster.Namespace, extraCluster.Name)
+			}
+
+			// A controller keeps updating a cluster while handlers iterate on the returned maps.
+			stop := make(chan struct{})
+			done := make(chan struct{})
+			go func() {
+				defer GinkgoRecover()
+				defer close(done)
+				for {
+					select {
+					case <-stop:
+						return
+					default:
+						manager.AddSveltosCluster(sveltosCluster)
+						manager.RemoveSveltosCluster(sveltosCluster.Namespace, sveltosCluster.Name)
+					}
+				}
+			}()
+
+			for i := 0; i < 2000; i++ {
+				clusters, err := manager.GetManagedSveltosClusters(context.TODO(), true, randomString(), nil)
+				Expect(err).To(BeNil())
+				for range clusters {
+				}
+			}
+
+			close(stop)
+			<-done
+		})
 	})
 })
