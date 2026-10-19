@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -50,11 +51,9 @@ var (
 )
 
 const (
-	// dashboardContentNamespace is the fixed namespace used for a dashboard-created
-	// ClusterProfile's YAML-flow ConfigMap. A ClusterProfile's PolicyRef.Namespace, left empty,
-	// resolves per-matching-cluster at deploy time, which is never what a single
-	// dashboard-created source of truth wants.
-	dashboardContentNamespace = "projectsveltos"
+	// defaultContentNamespace is the namespace used for a dashboard-created ClusterProfile's
+	// YAML-flow ConfigMap when the NAMESPACE env variable is not set.
+	defaultContentNamespace = "projectsveltos"
 
 	// contentDataKey is the single data key used for a dashboard-created ConfigMap/Secret's
 	// pasted YAML content and for referenced-content edits from PUT /profile, matching the
@@ -239,6 +238,18 @@ func validateRemoteURL(ru *RemoteURLInput) error {
 	return nil
 }
 
+// dashboardContentNamespace returns the namespace a dashboard-created ClusterProfile's
+// YAML-flow ConfigMap lives in: the namespace ui-backend itself runs in, read from the NAMESPACE
+// env variable (set via the downward API). A ClusterProfile's PolicyRef.Namespace, left empty,
+// resolves per-matching-cluster at deploy time, which is never what a single
+// dashboard-created source of truth wants.
+func dashboardContentNamespace() string {
+	if ns := os.Getenv("NAMESPACE"); ns != "" {
+		return ns
+	}
+	return defaultContentNamespace
+}
+
 // contentConfigMapNamespace returns the namespace a dashboard-created YAML-flow ConfigMap must
 // live in for the given profile identity - see the PolicyRef.Namespace doc comments in
 // api/v1beta1/spec.go this mirrors.
@@ -246,7 +257,7 @@ func contentConfigMapNamespace(id ProfileIdentity) string {
 	if id.Kind == configv1beta1.ProfileKind {
 		return id.Namespace
 	}
-	return dashboardContentNamespace
+	return dashboardContentNamespace()
 }
 
 // contentConfigMapName derives a ConfigMap name from the profile name, truncating and
