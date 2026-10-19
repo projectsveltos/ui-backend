@@ -166,11 +166,22 @@ var _ = Describe("Profile writes: validation", func() {
 		Expect(err).To(BeNil())
 	})
 
-	It("contentConfigMapNamespace uses the Profile's own namespace, and the fixed namespace for ClusterProfile", func() {
+	It("contentConfigMapNamespace uses the Profile's own namespace, and the NAMESPACE env for ClusterProfile", func() {
+		envNamespace := randomString()
+		GinkgoT().Setenv("NAMESPACE", envNamespace)
+
 		ns := randomString()
 		Expect(server.ContentConfigMapNamespace(server.ProfileIdentity{
 			Kind: configv1beta1.ProfileKind, Namespace: ns, Name: randomString(),
 		})).To(Equal(ns))
+		Expect(server.ContentConfigMapNamespace(server.ProfileIdentity{
+			Kind: configv1beta1.ClusterProfileKind, Name: randomString(),
+		})).To(Equal(envNamespace))
+	})
+
+	It("contentConfigMapNamespace falls back to the default namespace when NAMESPACE is not set", func() {
+		GinkgoT().Setenv("NAMESPACE", "")
+
 		Expect(server.ContentConfigMapNamespace(server.ProfileIdentity{
 			Kind: configv1beta1.ClusterProfileKind, Name: randomString(),
 		})).To(Equal(testDashboardNamespace))
@@ -244,7 +255,9 @@ var _ = Describe("Profile writes: create", func() {
 		Expect(cm.Data[testContentDataKey]).To(Equal(yamlContent))
 	})
 
-	It("creates a ClusterProfile's ConfigMap in the fixed dashboard namespace, PolicyRef.Namespace set explicitly", func() {
+	It("creates a ClusterProfile's ConfigMap in the dashboard namespace, PolicyRef.Namespace set explicitly", func() {
+		GinkgoT().Setenv("NAMESPACE", testDashboardNamespace)
+
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 		m := server.NewTestInstance(c, logger)
 
