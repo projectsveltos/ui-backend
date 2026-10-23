@@ -28,6 +28,9 @@ import (
 type MatchingClusters struct {
 	Cluster                 corev1.ObjectReference  `json:"cluster"`
 	ClusterFeatureSummaries []ClusterFeatureSummary `json:"clusterFeatureSummaries"`
+	// RolloutState tells whether the cluster has the latest version of the profile.
+	// Empty when there is nothing to report (no rollout pending and cluster not paused).
+	RolloutState RolloutState `json:"rolloutState,omitempty"`
 }
 
 type Profile struct {
@@ -43,6 +46,8 @@ type Profile struct {
 	Dependents []corev1.ObjectReference `json:"dependents"`
 	// List of managed clusters matching this profile
 	MatchingClusters []MatchingClusters `json:"matchingClusters"`
+	// Rollout counts the matching clusters per rollout state. Only set while a rollout is pending.
+	Rollout *RolloutSummary `json:"rollout,omitempty"`
 	// Profile's Spec section
 	Spec configv1beta1.Spec `json:"spec"`
 }

@@ -324,6 +324,20 @@ func (m *instance) GetManagedCAPIClusters(ctx context.Context, canListAll bool, 
 	return result, nil
 }
 
+// getClusterInfo returns the cached information about a cluster. found is false when the cluster is not cached.
+func (m *instance) getClusterInfo(cluster *corev1.ObjectReference) (info ClusterInfo, found bool) {
+	m.clusterMux.RLock()
+	defer m.clusterMux.RUnlock()
+
+	if cluster.Kind == clusterv1.ClusterKind {
+		info, found = m.capiClusters[*cluster]
+	} else {
+		info, found = m.sveltosClusters[*cluster]
+	}
+
+	return info, found
+}
+
 func (m *instance) GetClusterProfileStatuses() map[corev1.ObjectReference]ClusterProfileStatus {
 	m.clusterStatusesMux.RLock()
 	defer m.clusterStatusesMux.RUnlock()
