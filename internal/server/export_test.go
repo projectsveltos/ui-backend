@@ -329,3 +329,14 @@ var GetMaxUpdate = getMaxUpdate
 func (m *instance) GetClusterInfo(cluster *corev1.ObjectReference) (ClusterInfo, bool) {
 	return m.getClusterInfo(cluster)
 }
+
+// ClusterAccessChecker exposes clusterAccessChecker for tests.
+type ClusterAccessChecker = clusterAccessChecker
+
+func (m *instance) NewClusterAccessChecker(user string, groups []string) *clusterAccessChecker {
+	return m.newClusterAccessChecker(user, groups)
+}
+
+func (c *clusterAccessChecker) CanGet(cluster *corev1.ObjectReference) (bool, error) {
+	return c.canGet(cluster)
+}
