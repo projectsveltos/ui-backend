@@ -449,35 +449,40 @@ func (m *instance) getProfileInstance(ctx context.Context, namespace, name strin
 
 // getProfileSpecAndMatchingClusters returns:
 // - profile Spec
-// - list of all matching clusters. For each matching cluster, status of each feature is reported.
+// - list of all matching clusters. For each matching cluster, status of each feature and rollout state are reported.
+// - rollout summary, nil when no rollout is pending.
 func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profileRef *corev1.ObjectReference,
-	user string, groups []string) (*configv1beta1.Spec, []MatchingClusters, error) {
+	user string, groups []string) (*configv1beta1.Spec, []MatchingClusters, *RolloutSummary, error) {
 
 	var spec configv1beta1.Spec
-	var matchingClusters []corev1.ObjectReference
+	var status configv1beta1.Status
 	if profileRef.Kind == configv1beta1.ClusterProfileKind {
 		cp, err := m.getClusterProfileInstance(ctx, profileRef.Name)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		spec = cp.Spec
-		matchingClusters = cp.Status.MatchingClusterRefs
+		status = cp.Status
 	} else {
 		p, err := m.getProfileInstance(ctx, profileRef.Namespace, profileRef.Name)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		spec = p.Spec
-		matchingClusters = p.Status.MatchingClusterRefs
+		status = p.Status
 	}
+
+	matchingClusters := status.MatchingClusterRefs
+	rollout := newRolloutTracker(&status)
+	rolloutStates := make([]RolloutState, 0, len(matchingClusters))
 
 	accessibleMatchingClusters := make([]MatchingClusters, 0)
 	for i := range matchingClusters {
 		cluster := &matchingClusters[i]
 		canGet, err := m.canGetCluster(cluster.Namespace, cluster.Name, user, groups, clusterproxy.GetClusterType(cluster))
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if canGet {
 			clusterSummaryName := clusterops.GetClusterSummaryName(profileRef.Kind, profileRef.Name,
@@ -493,15 +498,23 @@ func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profil
 			m.clusterStatusesMux.Lock()
 			clusterProfileStatuses := m.clusterSummaryReport[*clusterSummaryRef]
 			m.clusterStatusesMux.Unlock()
+
+			clusterInfo, found := m.getClusterInfo(cluster)
+			rolloutState := rollout.stateOf(cluster, clusterInfo, found)
+			rolloutStates = append(rolloutStates, rolloutState)
+
 			accessibleMatchingClusters = append(accessibleMatchingClusters,
 				MatchingClusters{
 					Cluster:                 *cluster,
 					ClusterFeatureSummaries: clusterProfileStatuses.Summary,
+					RolloutState:            rolloutState,
 				})
 		}
 	}
 
-	return &spec, accessibleMatchingClusters, nil
+	rolloutSummary := rollout.summarize(rolloutStates, getMaxUpdate(&spec, len(matchingClusters)))
+
+	return &spec, accessibleMatchingClusters, rolloutSummary, nil
 }
 
 // canListClusterSummaries verifies whether user has permission to list ClusterSummaries

@@ -537,7 +537,7 @@ var (
 			c.JSON(http.StatusOK, "")
 		}
 
-		spec, matchingClusters, err := manager.getProfileSpecAndMatchingClusters(c.Request.Context(), profileRef, user, groups)
+		spec, matchingClusters, rollout, err := manager.getProfileSpecAndMatchingClusters(c.Request.Context(), profileRef, user, groups)
 		if err != nil {
 			ginLogger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get profile instance. %s: %v", c.Request.URL, err))
 			_ = c.AbortWithError(http.StatusInternalServerError, err)
@@ -550,6 +550,7 @@ var (
 			Name:             profileRef.Name,
 			Spec:             *spec,
 			MatchingClusters: matchingClusters,
+			Rollout:          rollout,
 			Dependencies:     transformSetToSlice(profileInfo.Dependencies),
 			Dependents:       transformSetToSlice(profileInfo.Dependents),
 		}

@@ -309,3 +309,23 @@ func GetManagedClusterDataNoFilters(clusters map[corev1.ObjectReference]ClusterI
 
 	return getManagedClusterData(clusters, &clusterFilters{labelSelector: labels.NewSelector()}, manager, clusterType)
 }
+
+// RolloutTracker and the functions below expose the rollout state computation for tests.
+type RolloutTracker = rolloutTracker
+
+var NewRolloutTracker = newRolloutTracker
+
+func (r *rolloutTracker) StateOf(cluster *corev1.ObjectReference, clusterInfo ClusterInfo, found bool) RolloutState {
+	return r.stateOf(cluster, clusterInfo, found)
+}
+
+func (r *rolloutTracker) Summarize(states []RolloutState, maxUpdate int) *RolloutSummary {
+	return r.summarize(states, maxUpdate)
+}
+
+var GetMaxUpdate = getMaxUpdate
+
+// GetClusterInfo exposes getClusterInfo for tests.
+func (m *instance) GetClusterInfo(cluster *corev1.ObjectReference) (ClusterInfo, bool) {
+	return m.getClusterInfo(cluster)
+}
