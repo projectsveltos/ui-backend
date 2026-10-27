@@ -18,12 +18,16 @@ package server_test
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -62,6 +66,11 @@ KPNrrouhZT4docpWLAsy2pVh
 // deny non-wildcard roles. Each test below grants a scoped, non-wildcard ClusterRole and
 // expects the corresponding canList* call to allow it.
 const clusterRoleKind = "ClusterRole"
+
+// roundTripperFunc lets a function be used as an http.RoundTripper
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
 var _ = Describe("SubjectAccessReview authorization", func() {
 	var k8sClient client.Client
@@ -297,6 +306,147 @@ var _ = Describe("SubjectAccessReview authorization", func() {
 			allowed, err := m.CanListManagementClusterClassifiers(user, nil)
 			return err == nil && allowed
 		}).Should(BeTrue())
+	})
+
+	Context("clusterAccessChecker", func() {
+		// reviewCounter counts the SubjectAccessReview requests that reach the apiserver
+		type reviewCounter struct {
+			count atomic.Int32
+		}
+		countingConfig := func(counter *reviewCounter) *rest.Config {
+			config := rest.CopyConfig(cfg)
+			config.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+				return roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+					if strings.Contains(req.URL.Path, "subjectaccessreviews") {
+						counter.count.Add(1)
+					}
+					return rt.RoundTrip(req)
+				})
+			}
+			return config
+		}
+
+		sveltosClusters := func(n int) []corev1.ObjectReference {
+			refs := make([]corev1.ObjectReference, 0, n)
+			for i := 0; i < n; i++ {
+				refs = append(refs, corev1.ObjectReference{
+					Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
+					Namespace: randomString(), Name: randomString(),
+				})
+			}
+			return refs
+		}
+		capiClusters := func(n int) []corev1.ObjectReference {
+			refs := make([]corev1.ObjectReference, 0, n)
+			for i := 0; i < n; i++ {
+				refs = append(refs, corev1.ObjectReference{
+					Kind: clusterv1.ClusterKind, APIVersion: clusterv1.GroupVersion.String(),
+					Namespace: randomString(), Name: randomString(),
+				})
+			}
+			return refs
+		}
+
+		It("checks once, not once per cluster, for a user who can get all the SveltosClusters", func() {
+			user := randomString()
+			counter := &reviewCounter{}
+			m := server.NewTestInstanceWithConfig(countingConfig(counter), k8sClient, logger)
+			bindClusterRole(user, libsveltosv1beta1.GroupVersion.Group, "sveltosclusters", "get")
+
+			clusters := sveltosClusters(20)
+			Eventually(func() bool {
+				allowed, err := m.NewClusterAccessChecker(user, nil).CanGet(&clusters[0])
+				return err == nil && allowed
+			}).Should(BeTrue())
+
+			counter.count.Store(0)
+			checker := m.NewClusterAccessChecker(user, nil)
+			for i := range clusters {
+				allowed, err := checker.CanGet(&clusters[i])
+				Expect(err).To(BeNil())
+				Expect(allowed).To(BeTrue())
+			}
+			Expect(counter.count.Load()).To(Equal(int32(1)))
+		})
+
+		It("checks once per cluster type", func() {
+			user := randomString()
+			counter := &reviewCounter{}
+			m := server.NewTestInstanceWithConfig(countingConfig(counter), k8sClient, logger)
+			bindClusterRole(user, libsveltosv1beta1.GroupVersion.Group, "sveltosclusters", "get")
+			bindClusterRole(user, clusterv1.GroupVersion.Group, "clusters", "get")
+
+			clusters := append(sveltosClusters(5), capiClusters(5)...)
+			Eventually(func() bool {
+				checker := m.NewClusterAccessChecker(user, nil)
+				for i := range clusters {
+					allowed, err := checker.CanGet(&clusters[i])
+					if err != nil || !allowed {
+						return false
+					}
+				}
+				return true
+			}).Should(BeTrue())
+
+			counter.count.Store(0)
+			checker := m.NewClusterAccessChecker(user, nil)
+			for i := range clusters {
+				allowed, err := checker.CanGet(&clusters[i])
+				Expect(err).To(BeNil())
+				Expect(allowed).To(BeTrue())
+			}
+			Expect(counter.count.Load()).To(Equal(int32(2)))
+		})
+
+		It("checks cluster by cluster, and allows only the clusters it can get, for a user limited to named clusters", func() {
+			user := randomString()
+			counter := &reviewCounter{}
+			m := server.NewTestInstanceWithConfig(countingConfig(counter), k8sClient, logger)
+
+			clusters := sveltosClusters(5)
+			role := &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{Name: randomString()},
+				Rules: []rbacv1.PolicyRule{{
+					APIGroups:     []string{libsveltosv1beta1.GroupVersion.Group},
+					Resources:     []string{"sveltosclusters"},
+					Verbs:         []string{"get"},
+					ResourceNames: []string{clusters[0].Name},
+				}},
+			}
+			Expect(k8sClient.Create(context.TODO(), role)).To(Succeed())
+			Expect(k8sClient.Create(context.TODO(), &rbacv1.ClusterRoleBinding{
+				ObjectMeta: metav1.ObjectMeta{Name: randomString()},
+				RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: clusterRoleKind, Name: role.Name},
+				Subjects:   []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: user, APIGroup: rbacv1.GroupName}},
+			})).To(Succeed())
+
+			Eventually(func() bool {
+				allowed, err := m.NewClusterAccessChecker(user, nil).CanGet(&clusters[0])
+				return err == nil && allowed
+			}).Should(BeTrue())
+
+			counter.count.Store(0)
+			checker := m.NewClusterAccessChecker(user, nil)
+			for i := range clusters {
+				allowed, err := checker.CanGet(&clusters[i])
+				Expect(err).To(BeNil())
+				Expect(allowed).To(Equal(i == 0))
+			}
+			// one check for all the SveltosClusters, which is denied, then one per cluster
+			Expect(counter.count.Load()).To(Equal(int32(1 + len(clusters))))
+		})
+
+		It("denies every cluster to a user with no permission", func() {
+			m := server.NewTestInstanceWithConfig(cfg, k8sClient, logger)
+			checker := m.NewClusterAccessChecker(randomString(), nil)
+
+			clusters := append(sveltosClusters(2), capiClusters(2)...)
+			for i := range clusters {
+				allowed, err := checker.CanGet(&clusters[i])
+				Expect(err).To(BeNil())
+				Expect(allowed).To(BeFalse())
+			}
+		})
 	})
 })
 

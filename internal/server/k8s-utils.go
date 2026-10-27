@@ -275,6 +275,121 @@ func (m *instance) canGetCluster(clusterNamespace, clusterName, user string, gro
 	return m.canGetSveltosCluster(clusterNamespace, clusterName, user, groups)
 }
 
+// canGetAllSveltosClusters returns true if user can get all SveltosClusters in all namespaces
+func (m *instance) canGetAllSveltosClusters(user string, groups []string) (bool, error) {
+	// Create a Kubernetes clientset
+	clientset, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clientset: %v", err))
+		return false, err
+	}
+
+	sar := &authorizationapi.SubjectAccessReview{
+		Spec: authorizationapi.SubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationapi.ResourceAttributes{
+				Verb:     verbGet,
+				Group:    libsveltosv1beta1.GroupVersion.Group,
+				Version:  libsveltosv1beta1.GroupVersion.Version,
+				Resource: resourceSveltosClusters,
+			},
+			User:   user,
+			Groups: groups,
+		},
+	}
+
+	canI, err := clientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), sar, metav1.CreateOptions{})
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check clientset permissions: %v", err))
+		return false, err
+	}
+
+	return canI.Status.Allowed, nil
+}
+
+// canGetAllCAPIClusters returns true if user can get all CAPI Clusters in all namespaces
+func (m *instance) canGetAllCAPIClusters(user string, groups []string) (bool, error) {
+	// Create a Kubernetes clientset
+	clientset, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clientset: %v", err))
+		return false, err
+	}
+
+	sar := &authorizationapi.SubjectAccessReview{
+		Spec: authorizationapi.SubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationapi.ResourceAttributes{
+				Verb:     verbGet,
+				Group:    clusterv1.GroupVersion.Group,
+				Version:  clusterv1.GroupVersion.Version,
+				Resource: resourceClusters,
+			},
+			User:   user,
+			Groups: groups,
+		},
+	}
+
+	canI, err := clientset.AuthorizationV1().SubjectAccessReviews().Create(context.TODO(), sar, metav1.CreateOptions{})
+	if err != nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to check clientset permissions: %v", err))
+		return false, err
+	}
+
+	return canI.Status.Allowed, nil
+}
+
+// canGetAllClusters returns true if user can get all the CAPI/Sveltos Clusters, in all namespaces
+func (m *instance) canGetAllClusters(user string, groups []string,
+	clusterType libsveltosv1beta1.ClusterType) (bool, error) {
+
+	if clusterType == libsveltosv1beta1.ClusterTypeCapi {
+		return m.canGetAllCAPIClusters(user, groups)
+	}
+
+	return m.canGetAllSveltosClusters(user, groups)
+}
+
+// clusterAccessChecker tells whether a user can get a cluster, for a request that checks many clusters.
+// A SubjectAccessReview is a call to the API server. A user allowed to get all the clusters of a type is found out
+// with one call per type for the whole request, instead of one call per cluster. Any other user is checked
+// cluster by cluster.
+type clusterAccessChecker struct {
+	m      *instance
+	user   string
+	groups []string
+	// canGetAll tells, for each cluster type, whether the user can get all the clusters of that type.
+	// A type is added the first time a cluster of that type is checked.
+	canGetAll map[libsveltosv1beta1.ClusterType]bool
+}
+
+func (m *instance) newClusterAccessChecker(user string, groups []string) *clusterAccessChecker {
+	return &clusterAccessChecker{
+		m:         m,
+		user:      user,
+		groups:    groups,
+		canGetAll: map[libsveltosv1beta1.ClusterType]bool{},
+	}
+}
+
+// canGet returns true if the user can get the cluster
+func (c *clusterAccessChecker) canGet(cluster *corev1.ObjectReference) (bool, error) {
+	clusterType := clusterproxy.GetClusterType(cluster)
+
+	canGetAll, ok := c.canGetAll[clusterType]
+	if !ok {
+		var err error
+		canGetAll, err = c.m.canGetAllClusters(c.user, c.groups, clusterType)
+		if err != nil {
+			return false, err
+		}
+		c.canGetAll[clusterType] = canGetAll
+	}
+	if canGetAll {
+		return true, nil
+	}
+
+	return c.m.canGetCluster(cluster.Namespace, cluster.Name, c.user, c.groups, clusterType)
+}
+
 // canListClusterProfiles verifies whether user has permission to view ClusterProfiles
 func (m *instance) canListClusterProfiles(user string, groups []string) (bool, error) {
 	// Create a Kubernetes clientset
@@ -477,10 +592,12 @@ func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profil
 	rollout := newRolloutTracker(&status)
 	rolloutStates := make([]RolloutState, 0, len(matchingClusters))
 
+	clusterAccess := m.newClusterAccessChecker(user, groups)
+
 	accessibleMatchingClusters := make([]MatchingClusters, 0)
 	for i := range matchingClusters {
 		cluster := &matchingClusters[i]
-		canGet, err := m.canGetCluster(cluster.Namespace, cluster.Name, user, groups, clusterproxy.GetClusterType(cluster))
+		canGet, err := clusterAccess.canGet(cluster)
 		if err != nil {
 			return nil, nil, nil, err
 		}
