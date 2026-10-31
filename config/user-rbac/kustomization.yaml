@@ -1,0 +1,5 @@
+# Kept out of config/default so these roles are not renamed by its namePrefix: users bind to
+# sveltos-dashboard-viewer and sveltos-dashboard-editor by name.
+resources:
+- dashboard_viewer.yaml
+- dashboard_editor.yaml

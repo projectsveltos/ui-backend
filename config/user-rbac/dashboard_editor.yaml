@@ -1,0 +1,52 @@
+# ClusterRole to bind to users who can also create, update and delete ClusterProfiles and
+# Profiles from the Sveltos dashboard. Write access to ClusterProfiles is effectively admin on
+# every cluster they select, because addon-controller deploys them with its own privileges.
+# The ConfigMaps and Secrets a profile references are deliberately not covered here: grant them
+# with a namespaced Role in the namespaces that hold the profile content.
+# Keep in sync with the SubjectAccessReviews issued in internal/server/k8s-utils.go and the
+# writes in internal/server/profile_writes.go.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sveltos-dashboard-editor
+rules:
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clustersummaries
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterprofiles
+  - profiles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - classifiers
+  - eventtriggers
+  - managementclusterclassifiers
+  - sveltosclusters
+  verbs:
+  - get
+  - list
+  - watch
