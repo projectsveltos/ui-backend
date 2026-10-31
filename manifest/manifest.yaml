@@ -247,6 +247,15 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - update
+- apiGroups:
   - lib.projectsveltos.io
   resources:
   - classifiers

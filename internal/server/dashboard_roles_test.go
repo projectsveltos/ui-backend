@@ -168,17 +168,37 @@ var _ = Describe("Dashboard ClusterRoles", func() {
 		Expect(isAllowed(user, verbUpdate, writableGroup, rbacClusterSummaries)).To(BeFalse())
 	})
 
-	It("neither role grants access to Secrets or ConfigMaps", func() {
+	It("sveltos-dashboard-editor allows the ConfigMap writes the dashboard sends and no others", func() {
+		user := randomString()
+		bindToUser(user, createShippedRole(editorRoleFile, dashboardEditor))
+
+		// Creating a profile from YAML creates the ConfigMap holding the YAML, and deletes it if the
+		// profile cannot be created. Editing a profile gets and updates the ConfigMap.
+		for _, verb := range []string{verbGet, verbCreate, verbUpdate, verbDelete} {
+			Eventually(func() bool {
+				return isAllowed(user, verb, "", configMapResource)
+			}).Should(BeTrue(), "%s %s", verb, configMapResource)
+		}
+
+		for _, verb := range []string{verbList, verbPatch} {
+			Expect(isAllowed(user, verb, "", configMapResource)).To(BeFalse(), "%s %s", verb, configMapResource)
+		}
+	})
+
+	It("neither role grants access to Secrets and the viewer does not grant access to ConfigMaps", func() {
 		viewer := randomString()
 		bindToUser(viewer, createShippedRole(viewerRoleFile, dashboardViewer))
 		editor := randomString()
 		bindToUser(editor, createShippedRole(editorRoleFile, dashboardEditor))
 
+		verbs := []string{verbGet, verbList, verbCreate, verbUpdate, verbDelete}
+		for _, verb := range verbs {
+			Expect(isAllowed(viewer, verb, "", configMapResource)).To(BeFalse(), "%s %s", verb, configMapResource)
+		}
+
 		for _, user := range []string{viewer, editor} {
-			for _, resource := range []string{secretsResource, configMapResource} {
-				for _, verb := range []string{verbGet, verbList, verbCreate, verbUpdate, verbDelete} {
-					Expect(isAllowed(user, verb, "", resource)).To(BeFalse(), "%s %s", verb, resource)
-				}
+			for _, verb := range verbs {
+				Expect(isAllowed(user, verb, "", secretsResource)).To(BeFalse(), "%s %s", verb, secretsResource)
 			}
 		}
 	})
