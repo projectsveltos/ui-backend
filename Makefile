@@ -130,6 +130,8 @@ manifests: $(CONTROLLER_GEN) $(KUSTOMIZE) $(ENVSUBST) fmt generate ## Generate W
 	$(CONTROLLER_GEN) rbac:roleName=controller-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	MANIFEST_IMG=$(CONTROLLER_IMG) MANIFEST_TAG=$(TAG) $(MAKE) set-manifest-image
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) > manifest/manifest.yaml
+	echo "---" >> manifest/manifest.yaml
+	$(KUSTOMIZE) build config/user-rbac >> manifest/manifest.yaml
 
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -274,6 +276,7 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	@echo 'Install projectsveltos ui-backend-manager components'
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) | $(KUBECTL) apply -f-
+	$(KUSTOMIZE) build config/user-rbac | $(KUBECTL) apply -f-
 
 	@echo "Waiting for projectsveltos ui-backend to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/ui-backend-manager -n projectsveltos --timeout=$(TIMEOUT)
