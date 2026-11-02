@@ -623,7 +623,7 @@ func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profil
 			accessibleMatchingClusters = append(accessibleMatchingClusters,
 				MatchingClusters{
 					Cluster:                 *cluster,
-					ClusterFeatureSummaries: clusterProfileStatuses.Summary,
+					ClusterFeatureSummaries: featureSummariesOrEmpty(clusterProfileStatuses.Summary),
 					RolloutState:            rolloutState,
 				})
 		}
@@ -632,6 +632,17 @@ func (m *instance) getProfileSpecAndMatchingClusters(ctx context.Context, profil
 	rolloutSummary := rollout.summarize(rolloutStates, getMaxUpdate(&spec, len(matchingClusters)))
 
 	return &spec, accessibleMatchingClusters, rolloutSummary, nil
+}
+
+// featureSummariesOrEmpty returns summaries, or an empty slice when it is nil.
+// A cluster waiting for its turn because of maxUpdate has no ClusterSummary yet, so there is
+// nothing in the cache for it. A nil slice would be sent to the dashboard as null, not [].
+func featureSummariesOrEmpty(summaries []ClusterFeatureSummary) []ClusterFeatureSummary {
+	if summaries == nil {
+		return []ClusterFeatureSummary{}
+	}
+
+	return summaries
 }
 
 // canListClusterSummaries verifies whether user has permission to list ClusterSummaries

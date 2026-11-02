@@ -325,6 +325,8 @@ func (r *rolloutTracker) Summarize(states []RolloutState, maxUpdate int) *Rollou
 
 var GetMaxUpdate = getMaxUpdate
 
+var FeatureSummariesOrEmpty = featureSummariesOrEmpty
+
 // GetClusterInfo exposes getClusterInfo for tests.
 func (m *instance) GetClusterInfo(cluster *corev1.ObjectReference) (ClusterInfo, bool) {
 	return m.getClusterInfo(cluster)

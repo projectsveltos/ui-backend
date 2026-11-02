@@ -18,6 +18,7 @@ package server_test
 
 import (
 	"context"
+	"encoding/json"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -179,6 +180,28 @@ var _ = Describe("Rollout state", func() {
 
 			_, found = manager.GetClusterInfo(newCluster())
 			Expect(found).To(BeFalse())
+		})
+	})
+
+	Context("featureSummariesOrEmpty", func() {
+		It("serializes a cluster waiting for its turn, which has no ClusterSummary yet, as [] and not null", func() {
+			waiting := server.MatchingClusters{
+				Cluster:                 *newCluster(),
+				ClusterFeatureSummaries: server.FeatureSummariesOrEmpty(nil),
+				RolloutState:            server.RolloutStateWaiting,
+			}
+
+			data, err := json.Marshal(waiting)
+			Expect(err).To(BeNil())
+			Expect(string(data)).To(ContainSubstring(`"clusterFeatureSummaries":[]`))
+		})
+
+		It("returns the summaries of a cluster that has a ClusterSummary unchanged", func() {
+			summaries := []server.ClusterFeatureSummary{{
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
+			}}
+			Expect(server.FeatureSummariesOrEmpty(summaries)).To(Equal(summaries))
 		})
 	})
 })
