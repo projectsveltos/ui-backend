@@ -165,7 +165,7 @@ spec:
           valueFrom:
             resourceFieldRef:
               resource: limits.memory
-        image: projectsveltos/ui-backend:v1.17.0
+        image: projectsveltos/ui-backend:v1.18.0
         livenessProbe:
           failureThreshold: 3
           httpGet:
