@@ -47,7 +47,7 @@ type ProfileReconciler struct {
 
 func (r *ProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling")
+	logger.V(logs.LogDebug).Info("Reconciling")
 
 	// Fecth the Profile instance
 	profile := &configv1beta1.Profile{}
@@ -76,7 +76,7 @@ func (r *ProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 func (r *ProfileReconciler) removeProfile(profileNamespace, profileName string, logger logr.Logger) {
-	logger.V(logs.LogInfo).Info("Reconciling Profile delete")
+	logger.V(logs.LogDebug).Info("Reconciling Profile delete")
 
 	manager := server.GetManagerInstance()
 	if manager == nil {
@@ -93,11 +93,11 @@ func (r *ProfileReconciler) removeProfile(profileNamespace, profileName string, 
 
 	manager.RemoveProfile(profileRef)
 
-	logger.V(logs.LogInfo).Info("Reconcile delete success")
+	logger.V(logs.LogDebug).Info("Reconcile delete success")
 }
 
 func (r *ProfileReconciler) reconcileNormal(profile *configv1beta1.Profile, logger logr.Logger) {
-	logger.V(logs.LogInfo).Info("Reconciling Profile normal")
+	logger.V(logs.LogDebug).Info("Reconciling Profile normal")
 
 	manager := server.GetManagerInstance()
 	if manager == nil {
@@ -124,7 +124,7 @@ func (r *ProfileReconciler) reconcileNormal(profile *configv1beta1.Profile, logg
 	manager.AddProfile(profileRef, profile.Spec.ClusterSelector, profile.Spec.Tier,
 		profile.Spec.SyncMode, dependencies)
 
-	logger.V(logs.LogInfo).Info("Reconcile normal success")
+	logger.V(logs.LogDebug).Info("Reconcile normal success")
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -47,7 +47,7 @@ type HealthCheckReportReconciler struct {
 
 func (r *HealthCheckReportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling")
+	logger.V(logs.LogDebug).Info("Reconciling")
 
 	report := &libsveltosv1beta1.HealthCheckReport{}
 	if err := r.Get(ctx, req.NamespacedName, report); err != nil {

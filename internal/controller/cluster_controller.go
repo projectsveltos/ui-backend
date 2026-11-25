@@ -46,7 +46,7 @@ type ClusterReconciler struct {
 
 func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling")
+	logger.V(logs.LogDebug).Info("Reconciling")
 
 	// Fecth the ClusterAPI powered cluster instance
 	cluster := &clusterv1.Cluster{}
@@ -75,7 +75,7 @@ func (r *ClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 func (r *ClusterReconciler) removeCAPICluster(clusterNamespace, clusterName string, logger logr.Logger) {
-	logger.V(logs.LogInfo).Info("Reconciling Cluster delete")
+	logger.V(logs.LogDebug).Info("Reconciling Cluster delete")
 
 	manager := server.GetManagerInstance()
 	if manager == nil {
@@ -85,11 +85,11 @@ func (r *ClusterReconciler) removeCAPICluster(clusterNamespace, clusterName stri
 
 	manager.RemoveCAPICluster(clusterNamespace, clusterName)
 
-	logger.V(logs.LogInfo).Info("Reconcile delete success")
+	logger.V(logs.LogDebug).Info("Reconcile delete success")
 }
 
 func (r *ClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster, logger logr.Logger) {
-	logger.V(logs.LogInfo).Info("Reconciling Cluster normal")
+	logger.V(logs.LogDebug).Info("Reconciling Cluster normal")
 
 	manager := server.GetManagerInstance()
 	if manager == nil {
@@ -99,7 +99,7 @@ func (r *ClusterReconciler) reconcileNormal(cluster *clusterv1.Cluster, logger l
 
 	manager.AddCAPICluster(cluster)
 
-	logger.V(logs.LogInfo).Info("Reconcile normal success")
+	logger.V(logs.LogDebug).Info("Reconcile normal success")
 }
 
 // SetupWithManager sets up the controller with the Manager.
