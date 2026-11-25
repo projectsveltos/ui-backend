@@ -48,7 +48,7 @@ type HealthCheckReconciler struct {
 
 func (r *HealthCheckReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling")
+	logger.V(logs.LogDebug).Info("Reconciling")
 
 	healthCheck := &metav1.PartialObjectMetadata{}
 	healthCheck.SetGroupVersionKind(libsveltosv1beta1.GroupVersion.WithKind(libsveltosv1beta1.HealthCheckKind))

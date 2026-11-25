@@ -47,7 +47,7 @@ type SveltosClusterReconciler struct {
 
 func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling")
+	logger.V(logs.LogDebug).Info("Reconciling")
 
 	// Fecth the sveltosCluster instance
 	sveltosCluster := &libsveltosv1beta1.SveltosCluster{}
@@ -76,7 +76,7 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 func (r *SveltosClusterReconciler) removeSveltosCluster(sveltosClusterNamespace, sveltosClusterName string, logger logr.Logger) {
-	logger.V(logs.LogInfo).Info("Reconciling SveltosCluster delete")
+	logger.V(logs.LogDebug).Info("Reconciling SveltosCluster delete")
 
 	manager := server.GetManagerInstance()
 	if manager == nil {
@@ -86,11 +86,11 @@ func (r *SveltosClusterReconciler) removeSveltosCluster(sveltosClusterNamespace,
 
 	manager.RemoveSveltosCluster(sveltosClusterNamespace, sveltosClusterName)
 
-	logger.V(logs.LogInfo).Info("Reconcile delete success")
+	logger.V(logs.LogDebug).Info("Reconcile delete success")
 }
 
 func (r *SveltosClusterReconciler) reconcileNormal(sveltosCluster *libsveltosv1beta1.SveltosCluster, logger logr.Logger) {
-	logger.V(logs.LogInfo).Info("Reconciling SveltosCluster normal")
+	logger.V(logs.LogDebug).Info("Reconciling SveltosCluster normal")
 
 	manager := server.GetManagerInstance()
 	if manager == nil {
@@ -100,7 +100,7 @@ func (r *SveltosClusterReconciler) reconcileNormal(sveltosCluster *libsveltosv1b
 
 	manager.AddSveltosCluster(sveltosCluster)
 
-	logger.V(logs.LogInfo).Info("Reconcile normal success")
+	logger.V(logs.LogDebug).Info("Reconcile normal success")
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -29,7 +29,7 @@ type ClusterSummaryReconciler struct {
 
 func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling")
+	logger.V(logs.LogDebug).Info("Reconciling")
 
 	clusterSummary := &configv1beta1.ClusterSummary{}
 	if err := r.Get(ctx, req.NamespacedName, clusterSummary); err != nil {
@@ -58,7 +58,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 func (r *ClusterSummaryReconciler) removeClusterSummary(clusterSummaryNamespace, clusterSummaryName string, logger logr.Logger) {
-	logger.V(logs.LogInfo).Info("Reconciling Cluster delete")
+	logger.V(logs.LogDebug).Info("Reconciling Cluster delete")
 
 	manager := server.GetManagerInstance()
 	if manager == nil {
@@ -68,11 +68,11 @@ func (r *ClusterSummaryReconciler) removeClusterSummary(clusterSummaryNamespace,
 
 	manager.RemoveClusterProfileStatus(clusterSummaryNamespace, clusterSummaryName)
 
-	logger.V(logs.LogInfo).Info("Reconcile delete success")
+	logger.V(logs.LogDebug).Info("Reconcile delete success")
 }
 
 func (r *ClusterSummaryReconciler) reconcileNormal(clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) {
-	logger.V(logs.LogInfo).Info("Reconciling new ClusterSummary")
+	logger.V(logs.LogDebug).Info("Reconciling new ClusterSummary")
 
 	manager := server.GetManagerInstance()
 	if manager == nil {
@@ -82,7 +82,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(clusterSummary *configv1beta1
 
 	manager.AddClusterProfileStatus(clusterSummary)
 
-	logger.V(logs.LogInfo).Info("Reconciling new ClusterSummary success")
+	logger.V(logs.LogDebug).Info("Reconciling new ClusterSummary success")
 }
 
 // SetupWithManager sets up the controller with the Manager.
